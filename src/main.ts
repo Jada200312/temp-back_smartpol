@@ -30,13 +30,13 @@ async function bootstrap() {
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
       'access-token'
     )
-    .addTag('System', '🏥 API status and health')
-    .addTag('Authentication', '🔐 Authentication, registration and JWT session management')
-    .addTag('Corporations', '🏢 Management of corporations and political groups')
-    .addTag('Users', '👥 System user management')
-    .addTag('Leaders', '👨‍💼 Management of political leaders and referents')
-    .addTag('Candidates', '🗳️ Management of candidates and electoral campaigns')
-    .addTag('Voters', '📊 Management of voters and electoral registry')
+    .addTag('System', 'API status and health')
+    .addTag('Authentication', 'Authentication, registration and JWT session management')
+    .addTag('Corporations', 'Management of corporations and political groups')
+    .addTag('Users', 'System user management')
+    .addTag('Leaders', 'Management of political leaders and referents')
+    .addTag('Candidates', 'Management of candidates and electoral campaigns')
+    .addTag('Voters', 'Management of voters and electoral registry')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
