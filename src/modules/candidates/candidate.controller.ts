@@ -280,4 +280,62 @@ export class CandidateController {
   async getLeadersByCandidate(@Param('candidateId') candidateId: string) {
     return await this.candidateService.getLeadersByCandidate(+candidateId);
   }
+
+  @Get('filter/leader/:leaderId/corporation/:corporationId')
+  @ApiParam({
+    name: 'leaderId',
+    type: 'number',
+    description: 'Leader ID',
+    example: 1
+  })
+  @ApiParam({
+    name: 'corporationId',
+    type: 'number',
+    description: 'Corporation ID',
+    example: 1
+  })
+  @ApiOperation({
+    summary: 'Get candidates by leader and corporation',
+    description: 'Returns all candidates associated with a specific leader and corporation'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Candidates found',
+    schema: {
+      example: [
+        {
+          id: 1,
+          name: 'Juan Duarte',
+          party: 'Partido Colombiano',
+          number: 1,
+          corporation_id: 1,
+          corporation: {
+            id: 1,
+            name: 'Corporation A'
+          },
+          leaders: [
+            {
+              id: 1,
+              name: 'HELMAR MENDOZA',
+              document: '1888116',
+              municipality: 'OVEJAS',
+              phone: '3103814496'
+            }
+          ],
+          createdAt: '2024-01-27T10:30:00Z',
+          updatedAt: '2024-01-27T10:30:00Z'
+        }
+      ]
+    }
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'No candidates found'
+  })
+  async findByLeaderAndCorporation(
+    @Param('leaderId') leaderId: number,
+    @Param('corporationId') corporationId: number,
+  ): Promise<Candidate[]> {
+    return await this.candidateService.findByLeaderAndCorporation(leaderId, corporationId);
+  }
 }

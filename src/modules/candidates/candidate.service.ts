@@ -95,4 +95,15 @@ export class CandidateService {
 
     return candidate.leaders;
   }
+
+  async findByLeaderAndCorporation(leaderId: number, corporationId: number): Promise<Candidate[]> {
+    return await this.candidateRepository
+      .createQueryBuilder('candidate')
+      .innerJoinAndSelect('candidate.leaders', 'leader', 'leader.id = :leaderId', { leaderId })
+      .innerJoinAndSelect('candidate.corporation', 'corporation')
+      .where('candidate.corporation_id = :corporationId', { corporationId })
+      .setParameter('leaderId', leaderId)
+      .setParameter('corporationId', corporationId)
+      .getMany();
+  }
 }
