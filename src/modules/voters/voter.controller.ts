@@ -163,4 +163,55 @@ export class VoterController {
   async remove(@Param('id') id: string): Promise<void> {
     return await this.voterService.remove(+id);
   }
+
+  @Post(':voterId/assign-candidate')
+  @ApiParam({
+    name: 'voterId',
+    type: 'number',
+    description: 'Voter ID',
+    example: 1
+  })
+  @ApiOperation({ 
+    summary: 'Assign candidate to voter',
+    description: 'Associate a candidate with a voter in the system'
+  })
+  @ApiBody({
+    description: 'Candidate ID to assign to the voter',
+    examples: {
+      example1: {
+        value: {
+          candidateId: 2
+        },
+        description: 'Example of assigning candidate ID 2 to voter'
+      }
+    }
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Candidate assigned successfully',
+    schema: {
+      example: {
+        id: 1,
+        firstName: 'Juan',
+        lastName: 'Pérez García',
+        identification: '1234567890',
+        candidates: [
+          {
+            id: 2,
+            name: 'Carlos López'
+          }
+        ]
+      }
+    }
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Voter or candidate not found'
+  })
+  async assignCandidate(
+    @Param('voterId') voterId: string,
+    @Body('candidateId') candidateId: number,
+  ): Promise<Voter> {
+    return await this.voterService.assignCandidate(+voterId, candidateId);
+  }
 }
