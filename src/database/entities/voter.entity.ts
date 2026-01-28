@@ -32,9 +32,15 @@ export class Voter {
   @Column()
   address: string;
 
+  @Column({ nullable: true })
+  departmentId: number;
+
   @ManyToOne(() => Department)
   @JoinColumn({ name: 'departmentId' })
   department: Department;
+
+  @Column({ nullable: true })
+  municipalityId: number;
 
   @ManyToOne(() => Municipality)
   @JoinColumn({ name: 'municipalityId' })
@@ -67,4 +73,3 @@ export class Voter {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
