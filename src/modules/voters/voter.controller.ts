@@ -182,62 +182,81 @@ export class VoterController {
     example: 1,
   })
   @ApiOperation({
-    summary: 'Assign candidate to voter',
+    summary: 'Assign candidates to voter',
     description:
-      'Associate a candidate (and optionally a leader) with a voter in the system',
+      'Associate one or more candidates (and a leader) with a voter in the system',
   })
   @ApiBody({
     type: AssignCandidateDto,
-    description: 'Candidate and optionally leader to assign',
+    description: 'Candidates and leader to assign',
     examples: {
       example1: {
         value: {
-          candidate_id: 2,
+          candidate_ids: [2, 3],
           leader_id: 1,
         },
         description:
-          'Example of assigning candidate ID 2 and leader ID 1 to voter',
+          'Example of assigning candidate IDs 2 and 3 and leader ID 1 to voter',
       },
       example2: {
         value: {
-          candidate_id: 2,
+          candidate_ids: [2],
+          leader_id: 1,
         },
-
-        description: 'Example of assigning only candidate ID 2 to voter',
+        description:
+          'Example of assigning single candidate ID 2 with leader ID 1 to voter',
       },
     },
   })
   @ApiResponse({
     status: 200,
-    description: 'Candidate assigned successfully',
+    description: 'Candidates assigned successfully',
     schema: {
-      example: {
-        id: 1,
-        voter_id: 1,
-        candidate_id: 2,
-        leader_id: 1,
-        candidate: {
-          id: 2,
-          name: 'Carlos López',
-        },
-        leader: {
+      example: [
+        {
           id: 1,
-          name: 'Juan Pérez',
+          voter_id: 1,
+          candidate_id: 2,
+          leader_id: 1,
+          candidate: {
+            id: 2,
+            name: 'Carlos López',
+          },
+          leader: {
+            id: 1,
+            name: 'Juan Pérez',
+          },
+          createdAt: '2024-01-27T10:30:00Z',
+          updatedAt: '2024-01-27T10:30:00Z',
         },
-        createdAt: '2024-01-27T10:30:00Z',
-        updatedAt: '2024-01-27T10:30:00Z',
-      },
+        {
+          id: 2,
+          voter_id: 1,
+          candidate_id: 3,
+          leader_id: 1,
+          candidate: {
+            id: 3,
+            name: 'María García',
+          },
+          leader: {
+            id: 1,
+            name: 'Juan Pérez',
+          },
+          createdAt: '2024-01-27T10:30:00Z',
+          updatedAt: '2024-01-27T10:30:00Z',
+        },
+      ],
     },
   })
   @ApiResponse({
     status: 400,
     description: 'Voter, candidate or leader not found',
   })
-  async assignCandidate(
+  async assignCandidates(
     @Param('voterId') voterId: string,
     @Body() assignCandidateDto: AssignCandidateDto,
-  ): Promise<CandidateVoter> {
-    return await this.voterService.updateAssignedCandidate(
+  ): Promise<CandidateVoter[]> {
+    return await this.voterService.updateAssignedCandidates(
       +voterId,
       assignCandidateDto,
     );
@@ -251,40 +270,41 @@ export class VoterController {
     example: 1,
   })
   @ApiOperation({
-    summary: 'Get assigned candidate for voter',
-    description:
-      'Retrieve the currently assigned candidate and leader for a voter',
+    summary: 'Get assigned candidates for voter',
+    description: 'Retrieve all candidates and leader assigned to a voter',
   })
   @ApiResponse({
     status: 200,
-    description: 'Assignment retrieved successfully',
+    description: 'Assignments retrieved successfully',
     schema: {
-      example: {
-        id: 1,
-        voter_id: 1,
-        candidate_id: 2,
-        leader_id: 1,
-        candidate: {
-          id: 2,
-          name: 'Carlos López',
-        },
-        leader: {
+      example: [
+        {
           id: 1,
-          name: 'Juan Pérez',
+          voter_id: 1,
+          candidate_id: 2,
+          leader_id: 1,
+          candidate: {
+            id: 2,
+            name: 'Carlos López',
+          },
+          leader: {
+            id: 1,
+            name: 'Juan Pérez',
+          },
+          createdAt: '2024-01-27T10:30:00Z',
+          updatedAt: '2024-01-27T10:30:00Z',
         },
-        createdAt: '2024-01-27T10:30:00Z',
-        updatedAt: '2024-01-27T10:30:00Z',
-      },
+      ],
     },
   })
   @ApiResponse({
-    status: 404,
-    description: 'No assignment found for this voter',
+    status: 200,
+    description: 'No assignments found for this voter',
   })
-  async getAssignedCandidate(
+  async getAssignedCandidates(
     @Param('voterId') voterId: string,
-  ): Promise<CandidateVoter | null> {
-    return await this.voterService.getAssignedCandidate(+voterId);
+  ): Promise<CandidateVoter[]> {
+    return await this.voterService.getAssignedCandidates(+voterId);
   }
 
   @Patch(':voterId/assign-candidate')
@@ -295,60 +315,79 @@ export class VoterController {
     example: 1,
   })
   @ApiOperation({
-    summary: 'Update assigned candidate for voter',
+    summary: 'Update assigned candidates for voter',
     description:
-      'Update the candidate and/or leader assigned to a voter. Can update both or just one.',
+      'Update the candidates and leader assigned to a voter. Replaces all previous assignments.',
   })
   @ApiBody({
     type: AssignCandidateDto,
-    description: 'Candidate and optionally leader to assign',
+    description: 'Candidates and leader to assign',
     examples: {
       example1: {
         value: {
-          candidate_id: 3,
+          candidate_ids: [2, 3],
           leader_id: 2,
         },
-        description: 'Example of updating both candidate and leader',
+        description: 'Example of updating with candidates 2 and 3 and leader 2',
       },
       example2: {
         value: {
-          candidate_id: 3,
+          candidate_ids: [3],
+          leader_id: 2,
         },
-        description: 'Example of updating only the candidate',
+        description: 'Example of updating with single candidate 3 and leader 2',
       },
     },
   })
   @ApiResponse({
     status: 200,
-    description: 'Assignment updated successfully',
+    description: 'Assignments updated successfully',
     schema: {
-      example: {
-        id: 1,
-        voter_id: 1,
-        candidate_id: 3,
-        leader_id: 2,
-        candidate: {
-          id: 3,
-          name: 'María García',
+      example: [
+        {
+          id: 1,
+          voter_id: 1,
+          candidate_id: 2,
+          leader_id: 2,
+          candidate: {
+            id: 2,
+            name: 'Carlos López',
+          },
+          leader: {
+            id: 2,
+            name: 'Pedro López',
+          },
+          createdAt: '2024-01-27T10:30:00Z',
+          updatedAt: '2024-01-27T11:45:00Z',
         },
-        leader: {
-          id: 2,
-          name: 'Pedro López',
+        {
+          id: 5,
+          voter_id: 1,
+          candidate_id: 3,
+          leader_id: 2,
+          candidate: {
+            id: 3,
+            name: 'María García',
+          },
+          leader: {
+            id: 2,
+            name: 'Pedro López',
+          },
+          createdAt: '2024-01-27T10:35:00Z',
+          updatedAt: '2024-01-27T11:45:00Z',
         },
-        createdAt: '2024-01-27T10:30:00Z',
-        updatedAt: '2024-01-27T11:45:00Z',
-      },
+      ],
     },
   })
   @ApiResponse({
     status: 400,
     description: 'Voter, candidate or leader not found',
   })
-  async updateAssignedCandidate(
+  async updateAssignedCandidates(
     @Param('voterId') voterId: string,
     @Body() assignCandidateDto: AssignCandidateDto,
-  ): Promise<CandidateVoter> {
-    return await this.voterService.updateAssignedCandidate(
+  ): Promise<CandidateVoter[]> {
+    return await this.voterService.updateAssignedCandidates(
       +voterId,
       assignCandidateDto,
     );

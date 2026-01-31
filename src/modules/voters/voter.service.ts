@@ -117,41 +117,32 @@ export class VoterService {
     return await this.voterRepository.save(voter);
   }
 
-  async getAssignedCandidate(voterId: number): Promise<CandidateVoter | null> {
+  async getAssignedCandidates(voterId: number): Promise<CandidateVoter[]> {
     const voter = await this.voterRepository.findOneBy({ id: voterId });
 
     if (!voter) {
       throw new Error(`Votante con ID ${voterId} no encontrado`);
     }
 
-    const assignment = await this.candidateVoterRepository.findOne({
+    const assignments = await this.candidateVoterRepository.find({
       where: { voterId },
       relations: ['candidate', 'leader'],
     });
 
-    return assignment || null;
+    return assignments;
   }
 
-  async updateAssignedCandidate(
+  async updateAssignedCandidates(
     voterId: number,
     assignCandidateDto: AssignCandidateDto,
-  ): Promise<CandidateVoter> {
+  ): Promise<CandidateVoter[]> {
     const voter = await this.voterRepository.findOneBy({ id: voterId });
 
     if (!voter) {
       throw new Error(`Votante con ID ${voterId} no encontrado`);
     }
 
-    const candidate = await this.candidateRepository.findOneBy({
-      id: assignCandidateDto.candidate_id,
-    });
-
-    if (!candidate) {
-      throw new Error(
-        `Candidato con ID ${assignCandidateDto.candidate_id} no encontrado`,
-      );
-    }
-
+    // Validar que el líder existe
     const leader = await this.leaderRepository.findOneBy({
       id: assignCandidateDto.leader_id,
     });
@@ -162,44 +153,44 @@ export class VoterService {
       );
     }
 
-    // Busca si ya existe una asignación para este votante
-    let assignment = await this.candidateVoterRepository.findOne({
-      where: { voterId },
-    });
+    // Validar que todos los candidatos existen
+    for (const candidateId of assignCandidateDto.candidate_ids) {
+      const candidate = await this.candidateRepository.findOneBy({
+        id: candidateId,
+      });
 
-    if (assignment) {
-      // Actualiza la asignación existente
-      await this.candidateVoterRepository.update(
-        { id: assignment.id },
-        {
-          candidateId: assignCandidateDto.candidate_id,
-          leaderId: assignCandidateDto.leader_id,
-        },
-      );
-    } else {
-      // Crea una nueva asignación usando query builder
+      if (!candidate) {
+        throw new Error(`Candidato con ID ${candidateId} no encontrado`);
+      }
+    }
+
+    // Eliminar asignaciones previas para este votante
+    await this.candidateVoterRepository.delete({ voterId });
+
+    // Crear nuevas asignaciones
+    for (const candidateId of assignCandidateDto.candidate_ids) {
       await this.candidateVoterRepository
         .createQueryBuilder()
         .insert()
         .into(CandidateVoter)
         .values({
           voterId,
-          candidateId: assignCandidateDto.candidate_id,
+          candidateId,
           leaderId: assignCandidateDto.leader_id,
         })
         .execute();
     }
 
-    // Retorna la asignación actualizada con las relaciones
-    const result = await this.candidateVoterRepository.findOne({
+    // Retornar las asignaciones actualizado con las relaciones
+    const results = await this.candidateVoterRepository.find({
       where: { voterId },
       relations: ['candidate', 'leader'],
     });
 
-    if (!result) {
-      throw new Error('Error al recuperar la asignación creada');
+    if (!results || results.length === 0) {
+      throw new Error('Error al recuperar las asignaciones creadas');
     }
 
-    return result;
+    return results;
   }
 }
