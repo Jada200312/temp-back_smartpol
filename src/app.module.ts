@@ -11,7 +11,16 @@ import { VoterModule } from './modules/voters/voter.module';
 import { CandidateModule } from './modules/candidates/candidate.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { MunicipalityModule } from './modules/municipalities/municipality.module';
-import { User, Candidate, Leader, Corporation, Voter, Department, Municipality } from './database/entities';
+import {
+  User,
+  Candidate,
+  Leader,
+  Corporation,
+  Voter,
+  Department,
+  Municipality,
+  CandidateVoter,
+} from './database/entities';
 
 @Module({
   imports: [
@@ -26,8 +35,17 @@ import { User, Candidate, Leader, Corporation, Voter, Department, Municipality }
       username: process.env.DB_USERNAME || 'temp-smartpol_user',
       password: process.env.DB_PASSWORD || 'temp-smartpol_password',
       database: process.env.DB_DATABASE || 'temp-smartpol_db',
-      entities: [User, Candidate, Leader, Corporation, Voter, Department, Municipality],
-      synchronize: true,
+      entities: [
+        User,
+        Candidate,
+        Leader,
+        Corporation,
+        Voter,
+        Department,
+        Municipality,
+        CandidateVoter,
+      ],
+      synchronize: false,
       logging: process.env.NODE_ENV === 'development',
     }),
     AuthModule,
@@ -43,4 +61,3 @@ import { User, Candidate, Leader, Corporation, Voter, Department, Municipality }
   providers: [AppService],
 })
 export class AppModule {}
-

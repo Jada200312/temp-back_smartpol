@@ -1,132 +1,148 @@
-import { IsString, IsNotEmpty, IsEmail, IsDateString, IsNumber } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsEmail,
+  IsDateString,
+  IsNumber,
+  IsOptional,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateVoterDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Juan',
-    description: 'Voter first name (required)'
+    description: 'Voter first name (required)',
   })
   @IsString()
   @IsNotEmpty()
   firstName: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Pérez García',
-    description: 'Voter last name (required)'
+    description: 'Voter last name (required)',
   })
   @IsString()
   @IsNotEmpty()
   lastName: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: '1234567890',
-    description: 'Voter identification number (required)'
+    description: 'Voter identification number (required)',
   })
   @IsString()
   @IsNotEmpty()
   identification: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'M',
-    description: 'Voter gender, M for male or F for female (required)'
+    description: 'Voter gender, M for male or F for female (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  gender: string;
+  @IsOptional()
+  gender?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'O+',
-    description: 'Voter blood type (required)'
+    description: 'Voter blood type (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  bloodType: string;
+  @IsOptional()
+  bloodType?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: '1980-01-15',
-    description: 'Voter birth date in YYYY-MM-DD format (required)'
+    description: 'Voter birth date in YYYY-MM-DD format (optional)',
+    required: false,
   })
   @IsDateString()
-  @IsNotEmpty()
-  birthDate: string;
+  @IsOptional()
+  birthDate?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: '+57 312 123 4567',
-    description: 'Voter phone number (required)'
+    description: 'Voter phone number (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  phone: string;
+  @IsOptional()
+  phone?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Cra 5 #12-34 Apt 201',
-    description: 'Voter physical address (required)'
+    description: 'Voter physical address (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  address: string;
+  @IsOptional()
+  address?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 1,
-    description: 'Department ID (required)'
+    description: 'Department ID (required)',
   })
   @IsNumber()
   @IsNotEmpty()
   departmentId: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 1,
-    description: 'Municipality ID (required)'
+    description: 'Municipality ID (required)',
   })
   @IsNumber()
   @IsNotEmpty()
   municipalityId: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Centro',
-    description: 'Voter neighborhood (required)'
+    description: 'Voter neighborhood (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  neighborhood: string;
+  @IsOptional()
+  neighborhood?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'voter@example.com',
-    description: 'Voter email address (required)'
+    description: 'Voter email address (optional)',
+    required: false,
   })
   @IsEmail()
-  @IsNotEmpty()
-  email: string;
+  @IsOptional()
+  email?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Ingeniero',
-    description: 'Voter occupation or job title (required)'
+    description: 'Voter occupation or job title (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  occupation: string;
+  @IsOptional()
+  occupation?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Escuela Distrital Juan',
-    description: 'Voter voting location or polling station (required)'
+    description: 'Voter voting location or polling station (required)',
   })
   @IsString()
   @IsNotEmpty()
   votingLocation: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Booth 1',
-    description: 'Voter voting booth number or identifier (required)'
+    description: 'Voter voting booth number or identifier (required)',
   })
   @IsString()
   @IsNotEmpty()
   votingBooth: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Active',
-    description: 'Voter political status (Active, Inactive, etc.) (required)'
+    description: 'Voter political status (optional)',
+    required: false,
   })
   @IsString()
-  @IsNotEmpty()
-  politicalStatus: string;
+  @IsOptional()
+  politicalStatus?: string;
 }

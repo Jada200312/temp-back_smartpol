@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Candidate } from './candidate.entity';
 
 @Entity('leaders')
@@ -27,4 +34,3 @@ export class Leader {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

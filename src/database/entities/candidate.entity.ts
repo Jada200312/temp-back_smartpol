@@ -1,4 +1,14 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, ManyToMany, JoinColumn, JoinTable, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  ManyToMany,
+  JoinColumn,
+  JoinTable,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Corporation } from './corporation.entity';
 import { Leader } from './leader.entity';
 import { Voter } from './voter.entity';
@@ -46,4 +56,3 @@ export class Candidate {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-
