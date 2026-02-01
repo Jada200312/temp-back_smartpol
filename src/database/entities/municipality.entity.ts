@@ -1,18 +1,29 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  CreateDateColumn,
+  UpdateDateColumn,
+  Unique,
+} from 'typeorm';
 import { Department } from './department.entity';
 
 @Entity('municipalities')
+@Unique(['name', 'departmentId'])
 export class Municipality {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ unique: true })
+  @Column()
   name: string;
 
   @Column({ nullable: true })
   code: string;
 
-  @ManyToOne(() => Department, (department) => department.municipalities, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Department, (department) => department.municipalities, {
+    onDelete: 'CASCADE',
+  })
   department: Department;
 
   @Column()
