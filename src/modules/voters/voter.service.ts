@@ -293,22 +293,13 @@ export class VoterService {
       });
     }
 
-    // Contar total antes de paginar
-    const total = await query.getCount();
-
-    // Aplicar paginación
-    const page = Math.max(1, parseInt(filters.page as any) || 1);
-    const limit = Math.max(1, parseInt(filters.limit as any) || 50);
-    const skip = (page - 1) * limit;
-
-    query = query.skip(skip).take(limit);
-
-    const results = await query.getMany();
+    // Obtener TODOS los resultados sin paginación para agrupar correctamente
+    const allResults = await query.getMany();
 
     // Agrupar resultados por votante para evitar duplicados
     const votersMap = new Map<number, VoterReportDto>();
 
-    results.forEach((assignment) => {
+    allResults.forEach((assignment) => {
       const voterId = assignment.voter.id;
       if (!votersMap.has(voterId)) {
         votersMap.set(voterId, {
@@ -382,12 +373,23 @@ export class VoterService {
       }
     });
 
+    // Convertir el mapa a array y aplicar paginación sobre votantes únicos
+    const uniqueVoters = Array.from(votersMap.values());
+    const total = uniqueVoters.length;
+
+    // Aplicar paginación de votantes (20 por página por defecto)
+    const page = Math.max(1, parseInt(filters.page as any) || 1);
+    const limit = Math.max(1, parseInt(filters.limit as any) || 20);
+    const skip = (page - 1) * limit;
+
+    const paginatedVoters = uniqueVoters.slice(skip, skip + limit);
+
     // Obtener agregaciones
     const aggregations = await this.getAggregations(filters);
 
     return {
-      data: Array.from(votersMap.values()),
-      total: votersMap.size,
+      data: paginatedVoters,
+      total: total,
       aggregations,
     };
   }

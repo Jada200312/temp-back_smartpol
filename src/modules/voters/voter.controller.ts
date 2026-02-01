@@ -420,7 +420,7 @@ export class VoterController {
   @ApiOperation({
     summary: 'Get voter report with filters and aggregations',
     description:
-      'Get a detailed report of voters with dynamic filters and aggregations',
+      'Get a detailed report of voters with dynamic filters and aggregations. Pagination is based on unique voters (20 per page by default)',
   })
   @ApiQuery({
     name: 'gender',
@@ -474,7 +474,7 @@ export class VoterController {
     name: 'limit',
     type: 'number',
     required: false,
-    description: 'Records per page (default: 50)',
+    description: 'Unique voters per page (default: 20)',
   })
   @ApiResponse({
     status: 200,
