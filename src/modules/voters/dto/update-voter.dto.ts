@@ -107,20 +107,20 @@ export class UpdateVoterDto {
   occupation?: string;
 
   @ApiProperty({ 
-    example: 'Escuela Distrital Juan',
-    description: 'Voter voting location or polling station (optional)'
+    example: 1,
+    description: 'Voting Booth ID (optional)'
   })
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  votingLocation?: string;
+  votingBoothId?: number;
 
   @ApiProperty({ 
-    example: 'Booth 1',
-    description: 'Voter voting booth number or identifier (optional)'
+    example: 1,
+    description: 'Voting Table ID (optional)'
   })
-  @IsString()
+  @IsNumber()
   @IsOptional()
-  votingBooth?: string;
+  votingTableId?: number;
 
   @ApiProperty({ 
     example: 'Active',

@@ -7,3 +7,5 @@ export { Voter } from './voter.entity';
 export { Department } from './department.entity';
 export { Municipality } from './municipality.entity';
 export { CandidateVoter } from './candidate-voter.entity';
+export { VotingBooth } from './voting-booth.entity';
+export { VotingTable } from './voting-table.entity';

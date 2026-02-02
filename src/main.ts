@@ -3,25 +3,39 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
+function parseOrigins(env?: string) {
+  if (!env) return null;
+  return env
+    .split(',')
+    .map(o => o.trim())
+    .filter(Boolean);
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // CORS configuration
+  const origins = parseOrigins(process.env.CORS_ORIGIN);  
   app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',') || '*',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    credentials: true,
-    allowedHeaders: 'Content-Type,Authorization,Accept',
+    origin: origins?.length
+      ? origins
+      : [
+          'http://localhost:5173',
+          'http://127.0.0.1:5173',
+          'http://localhost:3000',
+          'http://127.0.0.1:3000',
+        ],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    credentials: false, // ✅ JWT Bearer => sin cookies
   });
 
-  // Global validation pipe
+
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
     transform: true,
   }));
 
-  // Swagger configuration
   const config = new DocumentBuilder()
     .setTitle('SmartPol API')
     .setDescription('RESTful API for managing political campaigns, candidates, leaders and voters')
@@ -40,7 +54,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  SwaggerModule.setup('docs', app, document); 
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

@@ -5,12 +5,15 @@ import {
   ManyToMany,
   ManyToOne,
   JoinColumn,
+  JoinTable,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Candidate } from './candidate.entity';
 import { Department } from './department.entity';
 import { Municipality } from './municipality.entity';
+import { VotingBooth } from './voting-booth.entity';
+import { VotingTable } from './voting-table.entity';
 
 @Entity('voters')
 export class Voter {
@@ -44,36 +47,49 @@ export class Voter {
   @Column({ nullable: true })
   departmentId: number;
 
-  @ManyToOne(() => Department)
+  @ManyToOne(() => Department, { nullable: true })
   @JoinColumn({ name: 'departmentId' })
   department: Department;
 
   @Column({ nullable: true })
   municipalityId: number;
 
-  @ManyToOne(() => Municipality)
+  @ManyToOne(() => Municipality, { nullable: true })
   @JoinColumn({ name: 'municipalityId' })
   municipality: Municipality;
 
-  @Column()
+  @Column({ nullable: true })
   neighborhood: string;
 
-  @Column({ unique: true })
+  @Column({ nullable: true })
   email: string;
 
-  @Column()
+  @Column({ nullable: true })
   occupation: string;
 
-  @Column()
-  votingLocation: string;
+  @Column({ nullable: true })
+  votingBoothId: number;
 
-  @Column()
-  votingBooth: string;
+  @ManyToOne(() => VotingBooth, { nullable: true })
+  @JoinColumn({ name: 'votingBoothId' })
+  votingBooth: VotingBooth;
 
-  @Column()
+  @Column({ nullable: true })
+  votingTableId: number;
+
+  @ManyToOne(() => VotingTable, { nullable: true })
+  @JoinColumn({ name: 'votingTableId' })
+  votingTable: VotingTable;
+
+  @Column({ nullable: true })
   politicalStatus: string;
 
   @ManyToMany(() => Candidate, (candidate) => candidate.voters)
+  @JoinTable({
+    name: 'candidate_voters',
+    joinColumn: { name: 'voterId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'candidateId', referencedColumnName: 'id' },
+  })
   candidates: Candidate[];
 
   @CreateDateColumn()

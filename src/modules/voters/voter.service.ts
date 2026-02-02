@@ -1,10 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Voter } from '../../database/entities/voter.entity';
 import { Candidate } from '../../database/entities/candidate.entity';
 import { Leader } from '../../database/entities/leader.entity';
 import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
+import { Department } from '../../database/entities/department.entity';
+import { Municipality } from '../../database/entities/municipality.entity';
+import { VotingBooth } from '../../database/entities/voting-booth.entity';
+import { VotingTable } from '../../database/entities/voting-table.entity';
 import { CreateVoterDto } from './dto/create-voter.dto';
 import { UpdateVoterDto } from './dto/update-voter.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
@@ -25,15 +29,93 @@ export class VoterService {
     private readonly leaderRepository: Repository<Leader>,
     @InjectRepository(CandidateVoter)
     private readonly candidateVoterRepository: Repository<CandidateVoter>,
+    @InjectRepository(Department)
+    private readonly departmentRepository: Repository<Department>,
+    @InjectRepository(Municipality)
+    private readonly municipalityRepository: Repository<Municipality>,
+    @InjectRepository(VotingBooth)
+    private readonly votingBoothRepository: Repository<VotingBooth>,
+    @InjectRepository(VotingTable)
+    private readonly votingTableRepository: Repository<VotingTable>,
   ) {}
 
   async create(createVoterDto: CreateVoterDto): Promise<Voter> {
+    // Validar que el departamento existe
+    if (createVoterDto.departmentId) {
+      const department = await this.departmentRepository.findOneBy({
+        id: createVoterDto.departmentId,
+      });
+      if (!department) {
+        throw new BadRequestException(
+          `Departamento con ID ${createVoterDto.departmentId} no encontrado`,
+        );
+      }
+    }
+
+    // Validar que el municipio existe
+    if (createVoterDto.municipalityId) {
+      const municipality = await this.municipalityRepository.findOneBy({
+        id: createVoterDto.municipalityId,
+      });
+      if (!municipality) {
+        throw new BadRequestException(
+          `Municipio con ID ${createVoterDto.municipalityId} no encontrado`,
+        );
+      }
+    }
+
+    // Validar que el puesto de votación existe
+    if (createVoterDto.votingBoothId) {
+      const votingBooth = await this.votingBoothRepository.findOneBy({
+        id: createVoterDto.votingBoothId,
+      });
+      if (!votingBooth) {
+        throw new BadRequestException(
+          `Puesto de votación con ID ${createVoterDto.votingBoothId} no encontrado`,
+        );
+      }
+    }
+
+    // Validar que la mesa de votación existe
+    if (createVoterDto.votingTableId) {
+      const votingTable = await this.votingTableRepository.findOneBy({
+        id: createVoterDto.votingTableId,
+      });
+      if (!votingTable) {
+        throw new BadRequestException(
+          `Mesa de votación con ID ${createVoterDto.votingTableId} no encontrado`,
+        );
+      }
+    }
+
+    // Verificar que identification sea única
+    const existingIdentification = await this.voterRepository.findOneBy({
+      identification: createVoterDto.identification,
+    });
+    if (existingIdentification) {
+      throw new BadRequestException(
+        `La identificación ${createVoterDto.identification} ya existe`,
+      );
+    }
+
+    // Verificar que email sea único
+    const existingEmail = await this.voterRepository.findOneBy({
+      email: createVoterDto.email,
+    });
+    if (existingEmail) {
+      throw new BadRequestException(
+        `El email ${createVoterDto.email} ya existe`,
+      );
+    }
+
     const voter = this.voterRepository.create(createVoterDto);
     return await this.voterRepository.save(voter);
   }
 
   async findAll(): Promise<Voter[]> {
-    return await this.voterRepository.find();
+    return await this.voterRepository.find({
+      relations: ['department', 'municipality', 'votingBooth', 'votingTable'],
+    });
   }
 
   async findAllPaginated(
@@ -45,6 +127,7 @@ export class VoterService {
     const [data, total] = await this.voterRepository.findAndCount({
       skip,
       take: limit,
+      relations: ['department', 'municipality', 'votingBooth', 'votingTable'],
     });
 
     const pages = Math.ceil(total / limit);
@@ -62,19 +145,25 @@ export class VoterService {
     };
   }
 
-  async findOne(id: number): Promise<Voter | null> {
-    return await this.voterRepository.findOneBy({ id });
+  async findOne(id: number): Promise<Voter> {
+    const voter = await this.voterRepository.findOne({
+      where: { id },
+      relations: ['department', 'municipality', 'votingBooth', 'votingTable'],
+    });
+
+    if (!voter) {
+      throw new NotFoundException(`Votante con ID ${id} no encontrado`);
+    }
+
+    return voter;
   }
 
-  async update(
-    id: number,
-    updateVoterDto: UpdateVoterDto,
-  ): Promise<Voter | null> {
+  async update(id: number, updateVoterDto: UpdateVoterDto): Promise<Voter> {
     // Obtén el votante actual
     const voter = await this.voterRepository.findOneBy({ id });
 
     if (!voter) {
-      throw new Error(`Votante con ID ${id} no encontrado`);
+      throw new NotFoundException(`Votante con ID ${id} no encontrado`);
     }
 
     // Si se intenta actualizar identification, verifica que no exista en otro votante
@@ -86,7 +175,7 @@ export class VoterService {
         identification: updateVoterDto.identification,
       });
       if (existingIdentification) {
-        throw new Error(
+        throw new BadRequestException(
           `La identificación ${updateVoterDto.identification} ya existe`,
         );
       }
@@ -98,7 +187,57 @@ export class VoterService {
         email: updateVoterDto.email,
       });
       if (existingEmail) {
-        throw new Error(`El email ${updateVoterDto.email} ya existe`);
+        throw new BadRequestException(
+          `El email ${updateVoterDto.email} ya existe`,
+        );
+      }
+    }
+
+    // Validar que el departamento existe si se actualiza
+    if (updateVoterDto.departmentId) {
+      const department = await this.departmentRepository.findOneBy({
+        id: updateVoterDto.departmentId,
+      });
+      if (!department) {
+        throw new BadRequestException(
+          `Departamento con ID ${updateVoterDto.departmentId} no encontrado`,
+        );
+      }
+    }
+
+    // Validar que el municipio existe si se actualiza
+    if (updateVoterDto.municipalityId) {
+      const municipality = await this.municipalityRepository.findOneBy({
+        id: updateVoterDto.municipalityId,
+      });
+      if (!municipality) {
+        throw new BadRequestException(
+          `Municipio con ID ${updateVoterDto.municipalityId} no encontrado`,
+        );
+      }
+    }
+
+    // Validar que el puesto de votación existe si se actualiza
+    if (updateVoterDto.votingBoothId) {
+      const votingBooth = await this.votingBoothRepository.findOneBy({
+        id: updateVoterDto.votingBoothId,
+      });
+      if (!votingBooth) {
+        throw new BadRequestException(
+          `Puesto de votación con ID ${updateVoterDto.votingBoothId} no encontrado`,
+        );
+      }
+    }
+
+    // Validar que la mesa de votación existe si se actualiza
+    if (updateVoterDto.votingTableId) {
+      const votingTable = await this.votingTableRepository.findOneBy({
+        id: updateVoterDto.votingTableId,
+      });
+      if (!votingTable) {
+        throw new BadRequestException(
+          `Mesa de votación con ID ${updateVoterDto.votingTableId} no encontrado`,
+        );
       }
     }
 
@@ -108,19 +247,14 @@ export class VoterService {
   }
 
   async remove(id: number): Promise<void> {
-    // Primero obtén el votante con sus candidatos
-    const voter = await this.voterRepository.findOne({
-      where: { id },
-      relations: ['candidates'],
-    });
+    const voter = await this.voterRepository.findOneBy({ id });
 
     if (!voter) {
-      throw new Error(`Votante con ID ${id} no encontrado`);
+      throw new NotFoundException(`Votante con ID ${id} no encontrado`);
     }
 
-    // Limpia la relación muchos a muchos
-    voter.candidates = [];
-    await this.voterRepository.save(voter);
+    // Eliminar todas las asignaciones de candidatos para este votante
+    await this.candidateVoterRepository.delete({ voterId: id });
 
     // Ahora sí puedes borrar el votante
     await this.voterRepository.delete(id);
@@ -133,7 +267,7 @@ export class VoterService {
     });
 
     if (!voter) {
-      throw new Error(`Votante con ID ${voterId} no encontrado`);
+      throw new NotFoundException(`Votante con ID ${voterId} no encontrado`);
     }
 
     const candidate = await this.candidateRepository.findOneBy({
@@ -141,7 +275,9 @@ export class VoterService {
     });
 
     if (!candidate) {
-      throw new Error(`Candidato con ID ${candidateId} no encontrado`);
+      throw new NotFoundException(
+        `Candidato con ID ${candidateId} no encontrado`,
+      );
     }
 
     voter.candidates.push(candidate);
@@ -152,7 +288,7 @@ export class VoterService {
     const voter = await this.voterRepository.findOneBy({ id: voterId });
 
     if (!voter) {
-      throw new Error(`Votante con ID ${voterId} no encontrado`);
+      throw new NotFoundException(`Votante con ID ${voterId} no encontrado`);
     }
 
     const assignments = await this.candidateVoterRepository.find({
@@ -170,7 +306,7 @@ export class VoterService {
     const voter = await this.voterRepository.findOneBy({ id: voterId });
 
     if (!voter) {
-      throw new Error(`Votante con ID ${voterId} no encontrado`);
+      throw new NotFoundException(`Votante con ID ${voterId} no encontrado`);
     }
 
     // Validar que el líder existe
@@ -179,7 +315,7 @@ export class VoterService {
     });
 
     if (!leader) {
-      throw new Error(
+      throw new NotFoundException(
         `Líder con ID ${assignCandidateDto.leader_id} no encontrado`,
       );
     }
@@ -191,7 +327,9 @@ export class VoterService {
       });
 
       if (!candidate) {
-        throw new Error(`Candidato con ID ${candidateId} no encontrado`);
+        throw new NotFoundException(
+          `Candidato con ID ${candidateId} no encontrado`,
+        );
       }
     }
 
@@ -219,7 +357,9 @@ export class VoterService {
     });
 
     if (!results || results.length === 0) {
-      throw new Error('Error al recuperar las asignaciones creadas');
+      throw new BadRequestException(
+        'Error al recuperar las asignaciones creadas',
+      );
     }
 
     return results;
@@ -233,6 +373,8 @@ export class VoterService {
       .leftJoinAndSelect('cv.voter', 'voter')
       .leftJoinAndSelect('voter.department', 'department')
       .leftJoinAndSelect('voter.municipality', 'municipality')
+      .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
+      .leftJoinAndSelect('voter.votingTable', 'votingTable')
       .leftJoinAndSelect('cv.candidate', 'candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
       .leftJoinAndSelect('cv.leader', 'leader');
@@ -287,10 +429,22 @@ export class VoterService {
       }
     }
 
-    if (filters.votingLocation) {
-      query = query.andWhere('voter.votingLocation ILIKE :votingLocation', {
-        votingLocation: `%${filters.votingLocation}%`,
-      });
+    if (filters.votingBoothId) {
+      const votingBoothId = parseInt(filters.votingBoothId as any);
+      if (!isNaN(votingBoothId)) {
+        query = query.andWhere('voter.votingBoothId = :votingBoothId', {
+          votingBoothId,
+        });
+      }
+    }
+
+    if (filters.votingTableId) {
+      const votingTableId = parseInt(filters.votingTableId as any);
+      if (!isNaN(votingTableId)) {
+        query = query.andWhere('voter.votingTableId = :votingTableId', {
+          votingTableId,
+        });
+      }
     }
 
     // Obtener TODOS los resultados sin paginación para agrupar correctamente
@@ -325,8 +479,21 @@ export class VoterService {
               }
             : undefined,
           neighborhood: assignment.voter.neighborhood,
-          votingLocation: assignment.voter.votingLocation,
-          votingBooth: assignment.voter.votingBooth,
+          votingBoothId: assignment.voter.votingBoothId,
+          votingBooth: assignment.voter.votingBooth
+            ? {
+                id: assignment.voter.votingBooth.id,
+                name: assignment.voter.votingBooth.name,
+                code: assignment.voter.votingBooth.code,
+              }
+            : undefined,
+          votingTableId: assignment.voter.votingTableId,
+          votingTable: assignment.voter.votingTable
+            ? {
+                id: assignment.voter.votingTable.id,
+                tableNumber: assignment.voter.votingTable.tableNumber,
+              }
+            : undefined,
           candidates: [],
           leaders: [],
         });
@@ -334,7 +501,7 @@ export class VoterService {
 
       const voter = votersMap.get(voterId);
 
-      if (!voter) return; // Skip if voter not found
+      if (!voter) return;
 
       // Agregar candidato si no existe
       if (assignment.candidate) {
@@ -396,41 +563,101 @@ export class VoterService {
 
   private async getAggregations(filters: VoterReportFilterDto): Promise<any> {
     // Agregación por género
-    const genderCount = await this.candidateVoterRepository
+    let genderQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.voter', 'voter')
       .select('voter.gender', 'gender')
       .addSelect('COUNT(DISTINCT voter.id)', 'count')
-      .groupBy('voter.gender')
-      .getRawMany();
+      .groupBy('voter.gender');
+
+    // Aplicar filtros a agregaciones
+    if (filters.votingBoothId) {
+      const votingBoothId = parseInt(filters.votingBoothId as any);
+      if (!isNaN(votingBoothId)) {
+        genderQuery = genderQuery.andWhere('voter.votingBoothId = :votingBoothId', {
+          votingBoothId,
+        });
+      }
+    }
+
+    if (filters.votingTableId) {
+      const votingTableId = parseInt(filters.votingTableId as any);
+      if (!isNaN(votingTableId)) {
+        genderQuery = genderQuery.andWhere('voter.votingTableId = :votingTableId', {
+          votingTableId,
+        });
+      }
+    }
+
+    const genderCount = await genderQuery.getRawMany();
 
     // Agregación por líder
-    const leaderCount = await this.candidateVoterRepository
+    let leaderQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.leader', 'leader')
+      .leftJoinAndSelect('cv.voter', 'voter')
       .select('leader.id', 'id')
       .addSelect('leader.name', 'name')
       .addSelect('COUNT(DISTINCT cv.voterId)', 'count')
       .groupBy('leader.id')
-      .addGroupBy('leader.name')
-      .getRawMany();
+      .addGroupBy('leader.name');
+
+    if (filters.votingBoothId) {
+      const votingBoothId = parseInt(filters.votingBoothId as any);
+      if (!isNaN(votingBoothId)) {
+        leaderQuery = leaderQuery.andWhere('voter.votingBoothId = :votingBoothId', {
+          votingBoothId,
+        });
+      }
+    }
+
+    if (filters.votingTableId) {
+      const votingTableId = parseInt(filters.votingTableId as any);
+      if (!isNaN(votingTableId)) {
+        leaderQuery = leaderQuery.andWhere('voter.votingTableId = :votingTableId', {
+          votingTableId,
+        });
+      }
+    }
+
+    const leaderCount = await leaderQuery.getRawMany();
 
     // Agregación por candidato
-    const candidateCount = await this.candidateVoterRepository
+    let candidateQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.candidate', 'candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
+      .leftJoinAndSelect('cv.voter', 'voter')
       .select('candidate.id', 'id')
       .addSelect('candidate.name', 'name')
       .addSelect('corporation.name', 'corporationName')
       .addSelect('COUNT(DISTINCT cv.voterId)', 'count')
       .groupBy('candidate.id')
       .addGroupBy('candidate.name')
-      .addGroupBy('corporation.name')
-      .getRawMany();
+      .addGroupBy('corporation.name');
+
+    if (filters.votingBoothId) {
+      const votingBoothId = parseInt(filters.votingBoothId as any);
+      if (!isNaN(votingBoothId)) {
+        candidateQuery = candidateQuery.andWhere('voter.votingBoothId = :votingBoothId', {
+          votingBoothId,
+        });
+      }
+    }
+
+    if (filters.votingTableId) {
+      const votingTableId = parseInt(filters.votingTableId as any);
+      if (!isNaN(votingTableId)) {
+        candidateQuery = candidateQuery.andWhere('voter.votingTableId = :votingTableId', {
+          votingTableId,
+        });
+      }
+    }
+
+    const candidateCount = await candidateQuery.getRawMany();
 
     // Agregación por ubicación (departamento/municipio)
-    const locationCount = await this.candidateVoterRepository
+    let locationQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.voter', 'voter')
       .leftJoinAndSelect('voter.department', 'department')
@@ -443,8 +670,27 @@ export class VoterService {
       .groupBy('department.id')
       .addGroupBy('department.name')
       .addGroupBy('municipality.id')
-      .addGroupBy('municipality.name')
-      .getRawMany();
+      .addGroupBy('municipality.name');
+
+    if (filters.votingBoothId) {
+      const votingBoothId = parseInt(filters.votingBoothId as any);
+      if (!isNaN(votingBoothId)) {
+        locationQuery = locationQuery.andWhere('voter.votingBoothId = :votingBoothId', {
+          votingBoothId,
+        });
+      }
+    }
+
+    if (filters.votingTableId) {
+      const votingTableId = parseInt(filters.votingTableId as any);
+      if (!isNaN(votingTableId)) {
+        locationQuery = locationQuery.andWhere('voter.votingTableId = :votingTableId', {
+          votingTableId,
+        });
+      }
+    }
+
+    const locationCount = await locationQuery.getRawMany();
 
     return {
       byGender: genderCount,

@@ -1,52 +1,80 @@
 import { IsOptional, IsString, IsNumber, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class VoterReportFilterDto {
+  @ApiProperty({ required: false, example: 'M' })
   @IsOptional()
   @IsString()
   gender?: string;
 
+  @ApiProperty({ required: false, example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   leaderId?: number;
 
+  @ApiProperty({ required: false, example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   candidateId?: number;
 
+  @ApiProperty({ required: false, example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   corporationId?: number;
 
+  @ApiProperty({ required: false, example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   departmentId?: number;
 
+  @ApiProperty({ required: false, example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   municipalityId?: number;
 
+  @ApiProperty({ required: false, example: 1 })
   @IsOptional()
-  @IsString()
-  votingLocation?: string;
+  @Type(() => Number)
+  @IsNumber()
+  votingBoothId?: number;
 
+  @ApiProperty({ required: false, example: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  votingTableId?: number;
+
+  @ApiProperty({ required: false, example: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)
   page?: number;
 
+  @ApiProperty({ required: false, example: 20, minimum: 1, maximum: 500 })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(1)
   @Max(500)
   limit?: number;
+}
+
+export class VotingBoothDto {
+  id: number;
+  name: string;
+  code: string;
+}
+
+export class VotingTableDto {
+  id: number;
+  tableNumber: number;
 }
 
 export class VoterReportDto {
@@ -68,8 +96,10 @@ export class VoterReportDto {
     name: string;
   };
   neighborhood: string;
-  votingLocation: string;
-  votingBooth: string;
+  votingBoothId?: number;
+  votingBooth?: VotingBoothDto;
+  votingTableId?: number;
+  votingTable?: VotingTableDto;
   candidates?: Array<{
     id: number;
     name: string;

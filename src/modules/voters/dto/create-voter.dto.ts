@@ -122,20 +122,22 @@ export class CreateVoterDto {
   occupation?: string;
 
   @ApiProperty({
-    example: 'Escuela Distrital Juan',
-    description: 'Voter voting location or polling station (required)',
+    example: 1,
+    description: 'Voting Booth ID (optional)',
+    required: false,
   })
-  @IsString()
-  @IsNotEmpty()
-  votingLocation: string;
+  @IsNumber()
+  @IsOptional()
+  votingBoothId?: number;
 
   @ApiProperty({
-    example: 'Booth 1',
-    description: 'Voter voting booth number or identifier (required)',
+    example: 1,
+    description: 'Voting Table ID (optional)',
+    required: false,
   })
-  @IsString()
-  @IsNotEmpty()
-  votingBooth: string;
+  @IsNumber()
+  @IsOptional()
+  votingTableId?: number;
 
   @ApiProperty({
     example: 'Active',

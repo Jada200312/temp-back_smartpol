@@ -57,8 +57,8 @@ export class VoterController {
           neighborhood: 'Centro',
           email: 'voter@example.com',
           occupation: 'Ingeniero',
-          votingLocation: 'Escuela Distrital Juan',
-          votingBooth: 'Booth 1',
+          votingBoothId: 1,
+          votingTableId: 1,
           politicalStatus: 'Active',
         },
         description: 'Example of creating a voter',
@@ -84,8 +84,8 @@ export class VoterController {
         neighborhood: 'Centro',
         email: 'voter@example.com',
         occupation: 'Ingeniero',
-        votingLocation: 'Escuela Distrital Juan',
-        votingBooth: 'Booth 1',
+        votingBoothId: 1,
+        votingTableId: 1,
         politicalStatus: 'Active',
         createdAt: '2024-01-27T10:30:00Z',
         updatedAt: '2024-01-27T10:30:00Z',
@@ -459,16 +459,22 @@ export class VoterController {
     description: 'Filter by municipality ID',
   })
   @ApiQuery({
-    name: 'votingLocation',
-    type: 'string',
+    name: 'votingBoothId',
+    type: 'number',
     required: false,
-    description: 'Filter by voting location',
+    description: 'Filter by voting booth ID',
   })
   @ApiQuery({
     name: 'page',
     type: 'number',
     required: false,
     description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'votingTableId',
+    type: 'number',
+    required: false,
+    description: 'Filter by voting table ID',
   })
   @ApiQuery({
     name: 'limit',

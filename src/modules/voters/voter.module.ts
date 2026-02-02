@@ -8,6 +8,8 @@ import { Department } from '../../database/entities/department.entity';
 import { Municipality } from '../../database/entities/municipality.entity';
 import { VoterService } from './voter.service';
 import { VoterController } from './voter.controller';
+import { VotingBooth } from 'src/database/entities/voting-booth.entity';
+import { VotingTable } from 'src/database/entities/voting-table.entity';
 
 @Module({
   imports: [
@@ -18,6 +20,8 @@ import { VoterController } from './voter.controller';
       CandidateVoter,
       Department,
       Municipality,
+      VotingBooth,
+      VotingTable,
     ]),
   ],
   controllers: [VoterController],

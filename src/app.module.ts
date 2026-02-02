@@ -11,6 +11,8 @@ import { VoterModule } from './modules/voters/voter.module';
 import { CandidateModule } from './modules/candidates/candidate.module';
 import { DepartmentModule } from './modules/departments/department.module';
 import { MunicipalityModule } from './modules/municipalities/municipality.module';
+import { VotingBoothModule } from './modules/voting-booths/voting-booth.module';
+import { VotingTableModule } from './modules/voting-tables/voting-table.module';
 import {
   User,
   Candidate,
@@ -20,6 +22,8 @@ import {
   Department,
   Municipality,
   CandidateVoter,
+  VotingBooth,
+  VotingTable,
 } from './database/entities';
 
 @Module({
@@ -44,10 +48,24 @@ import {
         Department,
         Municipality,
         CandidateVoter,
+        VotingBooth,
+        VotingTable,
       ],
       synchronize: false,
       logging: process.env.NODE_ENV === 'development',
     }),
+    TypeOrmModule.forFeature([
+      User,
+      Candidate,
+      Leader,
+      Corporation,
+      Voter,
+      Department,
+      Municipality,
+      CandidateVoter,
+      VotingBooth,
+      VotingTable,
+    ]),
     AuthModule,
     CorporationModule,
     UserModule,
@@ -56,6 +74,8 @@ import {
     CandidateModule,
     DepartmentModule,
     MunicipalityModule,
+    VotingBoothModule,
+    VotingTableModule,
   ],
   controllers: [AppController],
   providers: [AppService],
