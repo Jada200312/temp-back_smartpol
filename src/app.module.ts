@@ -1,65 +1,83 @@
-import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { AppModule } from './app.module';
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AuthModule } from './modules/auth/auth.module';
+import { CorporationModule } from './modules/corporations/corporation.module';
+import { UserModule } from './modules/users/user.module';
+import { LeaderModule } from './modules/leaders/leader.module';
+import { VoterModule } from './modules/voters/voter.module';
+import { CandidateModule } from './modules/candidates/candidate.module';
+import { DepartmentModule } from './modules/departments/department.module';
+import { MunicipalityModule } from './modules/municipalities/municipality.module';
+import { VotingBoothModule } from './modules/voting-booths/voting-booth.module';
+import { VotingTableModule } from './modules/voting-tables/voting-table.module';
+import {
+  User,
+  Candidate,
+  Leader,
+  Corporation,
+  Voter,
+  Department,
+  Municipality,
+  CandidateVoter,
+  VotingBooth,
+  VotingTable,
+} from './database/entities';
 
-function parseOrigins(env?: string) {
-  if (!env) return null;
-  return env
-    .split(',')
-    .map(o => o.trim())
-    .filter(Boolean);
-}
-
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  const origins = parseOrigins(process.env.CORS_ORIGIN);  
-  app.enableCors({
-    origin: origins?.length
-      ? origins
-      : [
-          'http://localhost:5173',
-          'http://127.0.0.1:5173',
-          'http://localhost:3000',
-          'http://127.0.0.1:3000',
-        ],
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    credentials: false, // ✅ JWT Bearer => sin cookies
-  });
-
-
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-  }));
-
-  const config = new DocumentBuilder()
-    .setTitle('SmartPol API')
-    .setDescription('RESTful API for managing political campaigns, candidates, leaders and voters')
-    .setVersion('1.0.0')
-    .addBearerAuth(
-      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      'access-token'
-    )
-    .addTag('System', 'API status and health')
-    .addTag('Authentication', 'Authentication, registration and JWT session management')
-    .addTag('Corporations', 'Management of corporations and political groups')
-    .addTag('Users', 'System user management')
-    .addTag('Leaders', 'Management of political leaders and referents')
-    .addTag('Candidates', 'Management of candidates and electoral campaigns')
-    .addTag('Voters', 'Management of voters and electoral registry')
-    .build();
-
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document); 
-
-  const port = process.env.PORT ?? 3000;
-  await app.listen(port);
-  console.log(`✓ Application running on: http://localhost:${port}`);
-  console.log(`✓ Swagger documentation: http://localhost:${port}/api/docs`);
-}
-bootstrap();
-
+@Module({
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '5236', 10),
+      username: process.env.DB_USERNAME || 'temp-smartpol_user',
+      password: process.env.DB_PASSWORD || 'temp-smartpol_password',
+      database: process.env.DB_DATABASE || 'temp-smartpol_db',
+      entities: [
+        User,
+        Candidate,
+        Leader,
+        Corporation,
+        Voter,
+        Department,
+        Municipality,
+        CandidateVoter,
+        VotingBooth,
+        VotingTable,
+      ],
+      synchronize: false,
+      logging: process.env.NODE_ENV === 'development',
+    }),
+    TypeOrmModule.forFeature([
+      User,
+      Candidate,
+      Leader,
+      Corporation,
+      Voter,
+      Department,
+      Municipality,
+      CandidateVoter,
+      VotingBooth,
+      VotingTable,
+    ]),
+    AuthModule,
+    CorporationModule,
+    UserModule,
+    LeaderModule,
+    VoterModule,
+    CandidateModule,
+    DepartmentModule,
+    MunicipalityModule,
+    VotingBoothModule,
+    VotingTableModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
