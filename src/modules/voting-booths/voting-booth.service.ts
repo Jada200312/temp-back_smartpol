@@ -19,7 +19,7 @@ export class VotingBoothService {
 
   async findAll() {
     return await this.votingBoothRepository.find({
-      relations: ['municipality', 'votingTables'],
+      relations: ['municipality'],
       order: { name: 'ASC' },
     });
   }
@@ -27,7 +27,7 @@ export class VotingBoothService {
   async findByMunicipality(municipalityId: number) {
     return await this.votingBoothRepository.find({
       where: { municipalityId },
-      relations: ['municipality', 'votingTables'],
+      relations: ['municipality'],
       order: { name: 'ASC' },
     });
   }
@@ -35,11 +35,13 @@ export class VotingBoothService {
   async findOne(id: number) {
     const votingBooth = await this.votingBoothRepository.findOne({
       where: { id },
-      relations: ['municipality', 'votingTables'],
+      relations: ['municipality'],
     });
 
     if (!votingBooth) {
-      throw new NotFoundException(`Puesto de votación con ID ${id} no encontrado`);
+      throw new NotFoundException(
+        `Puesto de votación con ID ${id} no encontrado`,
+      );
     }
 
     return votingBooth;

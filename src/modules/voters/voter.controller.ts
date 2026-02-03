@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -123,6 +124,23 @@ export class VoterController {
     @Query() paginationQueryDto: PaginationQueryDto,
   ): Promise<PaginatedResponseDto<Voter>> {
     return await this.voterService.findAllPaginated(paginationQueryDto);
+  }
+
+  @Get('by-identification/:identification')
+  @ApiParam({
+    name: 'identification',
+    description: 'Voter identification number',
+  })
+  async findByIdentification(
+    @Param('identification') identification: string,
+  ): Promise<any> {
+    const voter = await this.voterService.findByIdentification(identification);
+    if (!voter) {
+      throw new NotFoundException(
+        `Voter with identification ${identification} not found`,
+      );
+    }
+    return voter;
   }
 
   @Get(':id')

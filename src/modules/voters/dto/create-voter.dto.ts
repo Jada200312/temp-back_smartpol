@@ -132,12 +132,12 @@ export class CreateVoterDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Voting Table ID (optional)',
+    description: 'Voting Table ID or Mesa number (optional)',
     required: false,
   })
-  @IsNumber()
+  @IsString()
   @IsOptional()
-  votingTableId?: number;
+  votingTableId?: string;
 
   @ApiProperty({
     example: 'Active',

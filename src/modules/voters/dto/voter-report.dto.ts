@@ -44,11 +44,10 @@ export class VoterReportFilterDto {
   @IsNumber()
   votingBoothId?: number;
 
-  @ApiProperty({ required: false, example: 1 })
+  @ApiProperty({ required: false, example: 'Mesa 1' })
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  votingTableId?: number;
+  @IsString()
+  votingTableId?: string;
 
   @ApiProperty({ required: false, example: 1 })
   @IsOptional()
@@ -98,7 +97,7 @@ export class VoterReportDto {
   neighborhood: string;
   votingBoothId?: number;
   votingBooth?: VotingBoothDto;
-  votingTableId?: number;
+  votingTableId?: string;
   votingTable?: VotingTableDto;
   candidates?: Array<{
     id: number;
