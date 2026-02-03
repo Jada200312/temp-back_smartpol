@@ -7,7 +7,7 @@ export class CreateVotingBoothDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ example: 'VB-ANTIOQUIA-MEDELLIN-001', required: false }) // ✅ OPCIONAL
+  @ApiProperty({ example: 'VB-ANTIOQUIA-MEDELLIN-001', required: false })
   @IsOptional()
   @IsString()
   code?: string;
@@ -16,4 +16,9 @@ export class CreateVotingBoothDto {
   @IsNotEmpty()
   @IsNumber()
   municipalityId: number;
+
+  @ApiProperty({ example: 5 })
+  @IsNotEmpty()
+  @IsNumber()
+  mesas: number;
 }

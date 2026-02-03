@@ -15,7 +15,7 @@ export class VotingTable {
   @Column()
   tableNumber: number;
 
-  @ManyToOne(() => VotingBooth, (votingBooth) => votingBooth.votingTables, {
+  @ManyToOne(() => VotingBooth, {
     onDelete: 'CASCADE',
     nullable: false,
   })

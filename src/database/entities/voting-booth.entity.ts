@@ -3,12 +3,10 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
-  OneToMany,
   JoinColumn,
   Unique,
 } from 'typeorm';
 import { Municipality } from './municipality.entity';
-import { VotingTable } from './voting-table.entity';
 
 @Entity('voting_booths')
 @Unique(['code', 'municipalityId'])
@@ -19,7 +17,7 @@ export class VotingBooth {
   @Column()
   name: string;
 
-  @Column({ unique: true, nullable: true }) // ✅ AGREGADO nullable: true
+  @Column({ nullable: true })
   code: string;
 
   @ManyToOne(() => Municipality, {
@@ -32,8 +30,6 @@ export class VotingBooth {
   @Column()
   municipalityId: number;
 
-  @OneToMany(() => VotingTable, (votingTable) => votingTable.votingBooth, {
-    cascade: ['remove'],
-  })
-  votingTables: VotingTable[];
+  @Column()
+  mesas: number;
 }

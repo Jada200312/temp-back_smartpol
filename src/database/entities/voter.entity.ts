@@ -13,7 +13,6 @@ import { Candidate } from './candidate.entity';
 import { Department } from './department.entity';
 import { Municipality } from './municipality.entity';
 import { VotingBooth } from './voting-booth.entity';
-import { VotingTable } from './voting-table.entity';
 
 @Entity('voters')
 export class Voter {
@@ -75,11 +74,7 @@ export class Voter {
   votingBooth: VotingBooth;
 
   @Column({ nullable: true })
-  votingTableId: number;
-
-  @ManyToOne(() => VotingTable, { nullable: true })
-  @JoinColumn({ name: 'votingTableId' })
-  votingTable: VotingTable;
+  votingTableId: string;
 
   @Column({ nullable: true })
   politicalStatus: string;

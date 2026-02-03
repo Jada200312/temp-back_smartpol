@@ -12,4 +12,7 @@ export class VotingBoothResponseDto {
 
   @ApiProperty({ example: 1 })
   municipalityId: number;
+
+  @ApiProperty({ example: 5 })
+  mesas: number;
 }

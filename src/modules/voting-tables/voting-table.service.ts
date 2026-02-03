@@ -19,7 +19,7 @@ export class VotingTableService {
 
   async findAll() {
     return await this.votingTableRepository.find({
-      relations: ['votingBooth', 'votingBooth.municipality'],
+      relations: ['votingBooth'],
       order: { tableNumber: 'ASC' },
     });
   }
@@ -35,11 +35,13 @@ export class VotingTableService {
   async findOne(id: number) {
     const votingTable = await this.votingTableRepository.findOne({
       where: { id },
-      relations: ['votingBooth', 'votingBooth.municipality'],
+      relations: ['votingBooth'],
     });
 
     if (!votingTable) {
-      throw new NotFoundException(`Mesa de votación con ID ${id} no encontrada`);
+      throw new NotFoundException(
+        `Mesa de votación con ID ${id} no encontrada`,
+      );
     }
 
     return votingTable;

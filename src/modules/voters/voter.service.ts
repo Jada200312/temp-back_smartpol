@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Voter } from '../../database/entities/voter.entity';
@@ -8,7 +12,6 @@ import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
 import { Department } from '../../database/entities/department.entity';
 import { Municipality } from '../../database/entities/municipality.entity';
 import { VotingBooth } from '../../database/entities/voting-booth.entity';
-import { VotingTable } from '../../database/entities/voting-table.entity';
 import { CreateVoterDto } from './dto/create-voter.dto';
 import { UpdateVoterDto } from './dto/update-voter.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
@@ -35,8 +38,6 @@ export class VoterService {
     private readonly municipalityRepository: Repository<Municipality>,
     @InjectRepository(VotingBooth)
     private readonly votingBoothRepository: Repository<VotingBooth>,
-    @InjectRepository(VotingTable)
-    private readonly votingTableRepository: Repository<VotingTable>,
   ) {}
 
   async create(createVoterDto: CreateVoterDto): Promise<Voter> {
@@ -64,7 +65,7 @@ export class VoterService {
       }
     }
 
-    // Validar que el puesto de votación existe
+    // Validar que el puesto de votación existe si se actualiza
     if (createVoterDto.votingBoothId) {
       const votingBooth = await this.votingBoothRepository.findOneBy({
         id: createVoterDto.votingBoothId,
@@ -72,18 +73,6 @@ export class VoterService {
       if (!votingBooth) {
         throw new BadRequestException(
           `Puesto de votación con ID ${createVoterDto.votingBoothId} no encontrado`,
-        );
-      }
-    }
-
-    // Validar que la mesa de votación existe
-    if (createVoterDto.votingTableId) {
-      const votingTable = await this.votingTableRepository.findOneBy({
-        id: createVoterDto.votingTableId,
-      });
-      if (!votingTable) {
-        throw new BadRequestException(
-          `Mesa de votación con ID ${createVoterDto.votingTableId} no encontrado`,
         );
       }
     }
@@ -98,14 +87,16 @@ export class VoterService {
       );
     }
 
-    // Verificar que email sea único
-    const existingEmail = await this.voterRepository.findOneBy({
-      email: createVoterDto.email,
-    });
-    if (existingEmail) {
-      throw new BadRequestException(
-        `El email ${createVoterDto.email} ya existe`,
-      );
+    // Verificar que email sea único (solo si se proporciona)
+    if (createVoterDto.email) {
+      const existingEmail = await this.voterRepository.findOneBy({
+        email: createVoterDto.email,
+      });
+      if (existingEmail) {
+        throw new BadRequestException(
+          `El email ${createVoterDto.email} ya existe`,
+        );
+      }
     }
 
     const voter = this.voterRepository.create(createVoterDto);
@@ -114,7 +105,7 @@ export class VoterService {
 
   async findAll(): Promise<Voter[]> {
     return await this.voterRepository.find({
-      relations: ['department', 'municipality', 'votingBooth', 'votingTable'],
+      relations: ['department', 'municipality', 'votingBooth'],
     });
   }
 
@@ -127,7 +118,7 @@ export class VoterService {
     const [data, total] = await this.voterRepository.findAndCount({
       skip,
       take: limit,
-      relations: ['department', 'municipality', 'votingBooth', 'votingTable'],
+      relations: ['department', 'municipality', 'votingBooth'],
     });
 
     const pages = Math.ceil(total / limit);
@@ -148,11 +139,26 @@ export class VoterService {
   async findOne(id: number): Promise<Voter> {
     const voter = await this.voterRepository.findOne({
       where: { id },
-      relations: ['department', 'municipality', 'votingBooth', 'votingTable'],
+      relations: ['department', 'municipality', 'votingBooth'],
     });
 
     if (!voter) {
       throw new NotFoundException(`Votante con ID ${id} no encontrado`);
+    }
+
+    return voter;
+  }
+
+  async findByIdentification(identification: string): Promise<Voter> {
+    const voter = await this.voterRepository.findOne({
+      where: { identification },
+      relations: ['department', 'municipality', 'votingBooth'],
+    });
+
+    if (!voter) {
+      throw new NotFoundException(
+        `Votante con identificación ${identification} no encontrado`,
+      );
     }
 
     return voter;
@@ -225,18 +231,6 @@ export class VoterService {
       if (!votingBooth) {
         throw new BadRequestException(
           `Puesto de votación con ID ${updateVoterDto.votingBoothId} no encontrado`,
-        );
-      }
-    }
-
-    // Validar que la mesa de votación existe si se actualiza
-    if (updateVoterDto.votingTableId) {
-      const votingTable = await this.votingTableRepository.findOneBy({
-        id: updateVoterDto.votingTableId,
-      });
-      if (!votingTable) {
-        throw new BadRequestException(
-          `Mesa de votación con ID ${updateVoterDto.votingTableId} no encontrado`,
         );
       }
     }
@@ -365,16 +359,20 @@ export class VoterService {
     return results;
   }
 
-  async getVoterReport(
-    filters: VoterReportFilterDto,
-  ): Promise<{ data: VoterReportDto[]; total: number; aggregations: any }> {
+  async getVoterReport(filters: VoterReportFilterDto): Promise<{
+    data: VoterReportDto[];
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    aggregations: any;
+  }> {
     let query = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.voter', 'voter')
       .leftJoinAndSelect('voter.department', 'department')
       .leftJoinAndSelect('voter.municipality', 'municipality')
       .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
-      .leftJoinAndSelect('voter.votingTable', 'votingTable')
       .leftJoinAndSelect('cv.candidate', 'candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
       .leftJoinAndSelect('cv.leader', 'leader');
@@ -488,12 +486,6 @@ export class VoterService {
               }
             : undefined,
           votingTableId: assignment.voter.votingTableId,
-          votingTable: assignment.voter.votingTable
-            ? {
-                id: assignment.voter.votingTable.id,
-                tableNumber: assignment.voter.votingTable.tableNumber,
-              }
-            : undefined,
           candidates: [],
           leaders: [],
         });
@@ -556,7 +548,10 @@ export class VoterService {
 
     return {
       data: paginatedVoters,
+      page,
+      limit,
       total: total,
+      pages: Math.ceil(total / limit),
       aggregations,
     };
   }
@@ -574,18 +569,24 @@ export class VoterService {
     if (filters.votingBoothId) {
       const votingBoothId = parseInt(filters.votingBoothId as any);
       if (!isNaN(votingBoothId)) {
-        genderQuery = genderQuery.andWhere('voter.votingBoothId = :votingBoothId', {
-          votingBoothId,
-        });
+        genderQuery = genderQuery.andWhere(
+          'voter.votingBoothId = :votingBoothId',
+          {
+            votingBoothId,
+          },
+        );
       }
     }
 
     if (filters.votingTableId) {
       const votingTableId = parseInt(filters.votingTableId as any);
       if (!isNaN(votingTableId)) {
-        genderQuery = genderQuery.andWhere('voter.votingTableId = :votingTableId', {
-          votingTableId,
-        });
+        genderQuery = genderQuery.andWhere(
+          'voter.votingTableId = :votingTableId',
+          {
+            votingTableId,
+          },
+        );
       }
     }
 
@@ -605,18 +606,24 @@ export class VoterService {
     if (filters.votingBoothId) {
       const votingBoothId = parseInt(filters.votingBoothId as any);
       if (!isNaN(votingBoothId)) {
-        leaderQuery = leaderQuery.andWhere('voter.votingBoothId = :votingBoothId', {
-          votingBoothId,
-        });
+        leaderQuery = leaderQuery.andWhere(
+          'voter.votingBoothId = :votingBoothId',
+          {
+            votingBoothId,
+          },
+        );
       }
     }
 
     if (filters.votingTableId) {
       const votingTableId = parseInt(filters.votingTableId as any);
       if (!isNaN(votingTableId)) {
-        leaderQuery = leaderQuery.andWhere('voter.votingTableId = :votingTableId', {
-          votingTableId,
-        });
+        leaderQuery = leaderQuery.andWhere(
+          'voter.votingTableId = :votingTableId',
+          {
+            votingTableId,
+          },
+        );
       }
     }
 
@@ -639,18 +646,24 @@ export class VoterService {
     if (filters.votingBoothId) {
       const votingBoothId = parseInt(filters.votingBoothId as any);
       if (!isNaN(votingBoothId)) {
-        candidateQuery = candidateQuery.andWhere('voter.votingBoothId = :votingBoothId', {
-          votingBoothId,
-        });
+        candidateQuery = candidateQuery.andWhere(
+          'voter.votingBoothId = :votingBoothId',
+          {
+            votingBoothId,
+          },
+        );
       }
     }
 
     if (filters.votingTableId) {
       const votingTableId = parseInt(filters.votingTableId as any);
       if (!isNaN(votingTableId)) {
-        candidateQuery = candidateQuery.andWhere('voter.votingTableId = :votingTableId', {
-          votingTableId,
-        });
+        candidateQuery = candidateQuery.andWhere(
+          'voter.votingTableId = :votingTableId',
+          {
+            votingTableId,
+          },
+        );
       }
     }
 
@@ -675,18 +688,24 @@ export class VoterService {
     if (filters.votingBoothId) {
       const votingBoothId = parseInt(filters.votingBoothId as any);
       if (!isNaN(votingBoothId)) {
-        locationQuery = locationQuery.andWhere('voter.votingBoothId = :votingBoothId', {
-          votingBoothId,
-        });
+        locationQuery = locationQuery.andWhere(
+          'voter.votingBoothId = :votingBoothId',
+          {
+            votingBoothId,
+          },
+        );
       }
     }
 
     if (filters.votingTableId) {
       const votingTableId = parseInt(filters.votingTableId as any);
       if (!isNaN(votingTableId)) {
-        locationQuery = locationQuery.andWhere('voter.votingTableId = :votingTableId', {
-          votingTableId,
-        });
+        locationQuery = locationQuery.andWhere(
+          'voter.votingTableId = :votingTableId',
+          {
+            votingTableId,
+          },
+        );
       }
     }
 

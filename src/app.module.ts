@@ -52,7 +52,7 @@ import {
         VotingTable,
       ],
       synchronize: false,
-      logging: process.env.NODE_ENV === 'development',
+      logging: false,
     }),
     TypeOrmModule.forFeature([
       User,
