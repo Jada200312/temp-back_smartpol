@@ -380,14 +380,14 @@ export class VoterService {
 
     if (filters.leaderId) {
       const leaderId = parseInt(filters.leaderId as any);
-      if (!isNaN(leaderId)) {
+      if (!isNaN(leaderId) && leaderId > 0) {
         query = query.andWhere('cv.leaderId = :leaderId', { leaderId });
       }
     }
 
     if (filters.candidateId) {
       const candidateId = parseInt(filters.candidateId as any);
-      if (!isNaN(candidateId)) {
+      if (!isNaN(candidateId) && candidateId > 0) {
         query = query.andWhere('cv.candidateId = :candidateId', {
           candidateId,
         });
@@ -396,7 +396,7 @@ export class VoterService {
 
     if (filters.corporationId) {
       const corporationId = parseInt(filters.corporationId as any);
-      if (!isNaN(corporationId)) {
+      if (!isNaN(corporationId) && corporationId > 0) {
         query = query.andWhere('candidate.corporation_id = :corporationId', {
           corporationId,
         });
@@ -405,7 +405,7 @@ export class VoterService {
 
     if (filters.departmentId) {
       const departmentId = parseInt(filters.departmentId as any);
-      if (!isNaN(departmentId)) {
+      if (!isNaN(departmentId) && departmentId > 0) {
         query = query.andWhere('voter.departmentId = :departmentId', {
           departmentId,
         });
@@ -414,7 +414,7 @@ export class VoterService {
 
     if (filters.municipalityId) {
       const municipalityId = parseInt(filters.municipalityId as any);
-      if (!isNaN(municipalityId)) {
+      if (!isNaN(municipalityId) && municipalityId > 0) {
         query = query.andWhere('voter.municipalityId = :municipalityId', {
           municipalityId,
         });
@@ -423,7 +423,7 @@ export class VoterService {
 
     if (filters.votingBoothId) {
       const votingBoothId = parseInt(filters.votingBoothId as any);
-      if (!isNaN(votingBoothId)) {
+      if (!isNaN(votingBoothId) && votingBoothId > 0) {
         query = query.andWhere('voter.votingBoothId = :votingBoothId', {
           votingBoothId,
         });
@@ -432,7 +432,7 @@ export class VoterService {
 
     if (filters.votingTableId) {
       const votingTableId = parseInt(filters.votingTableId as any);
-      if (!isNaN(votingTableId)) {
+      if (!isNaN(votingTableId) && votingTableId > 0) {
         query = query.andWhere('voter.votingTableId = :votingTableId', {
           votingTableId,
         });
