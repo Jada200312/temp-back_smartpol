@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { VotingTableService } from './voting-table.service';
+import { Permission } from '../../permissions/permission.decorator';
 import { CreateVotingTableDto } from './dto/create-voting-table.dto';
 import { UpdateVotingTableDto } from './dto/update-voting-table.dto';
 import { VotingTableResponseDto } from './dto/voting-table-response.dto';
@@ -20,6 +21,7 @@ export class VotingTableController {
   constructor(private readonly votingTableService: VotingTableService) {}
 
   @Post()
+  @Permission('voting-tables:create')
   @ApiOperation({ summary: 'Crear nueva mesa de votación' })
   @ApiResponse({
     status: 201,
@@ -31,6 +33,7 @@ export class VotingTableController {
   }
 
   @Get()
+  @Permission('voting-tables:read')
   @ApiOperation({ summary: 'Obtener todas las mesas de votación' })
   @ApiResponse({
     status: 200,
@@ -42,6 +45,7 @@ export class VotingTableController {
   }
 
   @Get('by-booth/:votingBoothId')
+  @Permission('voting-tables:read')
   @ApiOperation({ summary: 'Obtener mesas por puesto de votación' })
   @ApiResponse({
     status: 200,
@@ -55,6 +59,7 @@ export class VotingTableController {
   }
 
   @Get(':id')
+  @Permission('voting-tables:read')
   @ApiOperation({ summary: 'Obtener mesa por ID' })
   @ApiResponse({
     status: 200,
@@ -66,6 +71,7 @@ export class VotingTableController {
   }
 
   @Patch(':id')
+  @Permission('voting-tables:update')
   @ApiOperation({ summary: 'Actualizar mesa de votación' })
   @ApiResponse({
     status: 200,
@@ -80,6 +86,7 @@ export class VotingTableController {
   }
 
   @Delete(':id')
+  @Permission('voting-tables:delete')
   @ApiOperation({ summary: 'Eliminar mesa de votación' })
   @ApiResponse({ status: 200, description: 'Mesa eliminada' })
   remove(@Param('id', ParseIntPipe) id: number) {

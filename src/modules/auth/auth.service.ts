@@ -1,6 +1,11 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../users/user.service';
+import { PermissionsService } from '../../permissions/permissions.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -11,6 +16,7 @@ export class AuthService {
   constructor(
     private jwtService: JwtService,
     private userService: UserService,
+    private permissionsService: PermissionsService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -36,6 +42,7 @@ export class AuthService {
     return {
       id: usuario.id,
       email: usuario.email,
+      roleId: usuario.role?.id ?? null,
       access_token: accessToken,
       refresh_token: refreshToken,
       message: 'User registered successfully',
@@ -65,6 +72,7 @@ export class AuthService {
     return {
       id: usuario.id,
       email: usuario.email,
+      roleId: usuario.role?.id ?? null,
       access_token: accessToken,
       refresh_token: refreshToken,
       message: 'Login successful',
@@ -107,7 +115,7 @@ export class AuthService {
     try {
       // Verify the refresh token
       const payload = this.jwtService.verify(refreshTokenString);
-      
+
       // Get the user
       const user = await this.userService.findOne(payload.sub);
       if (!user) {
@@ -116,13 +124,14 @@ export class AuthService {
 
       // Generate new access token
       const newAccessToken = await this.generateToken(user);
-      
+
       // Generate new refresh token
       const newRefreshToken = await this.generateRefreshToken(user);
 
       return {
         id: user.id,
         email: user.email,
+        roleId: user.role?.id ?? null,
         access_token: newAccessToken,
         refresh_token: newRefreshToken,
         message: 'Token refreshed successfully',
@@ -133,14 +142,30 @@ export class AuthService {
   }
 
   private async generateToken(usuario: any): Promise<string> {
-    const payload = { email: usuario.email, sub: usuario.id };
+    const payload = {
+      email: usuario.email,
+      sub: usuario.id,
+      roleId: usuario.role?.id ?? null,
+    };
     return this.jwtService.sign(payload);
   }
 
   private async generateRefreshToken(usuario: any): Promise<string> {
-    const payload = { email: usuario.email, sub: usuario.id };
+    const payload = {
+      email: usuario.email,
+      sub: usuario.id,
+      roleId: usuario.role?.id ?? null,
+    };
     return this.jwtService.sign(payload, { expiresIn: '30d' });
   }
+
+  /**
+   * Obtiene los permisos del usuario autenticado
+   */
+  async getUserPermissions(userId: number, roleId: number): Promise<string[]> {
+    if (!roleId) {
+      return [];
+    }
+    return await this.permissionsService.getUserPermissions(userId, roleId);
+  }
 }
-
-

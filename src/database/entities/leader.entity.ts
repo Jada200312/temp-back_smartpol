@@ -3,10 +3,13 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToMany,
+  ManyToOne,
+  JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Candidate } from './candidate.entity';
+import { User } from './user.entity';
 
 @Entity('leaders')
 export class Leader {
@@ -24,6 +27,13 @@ export class Leader {
 
   @Column()
   phone: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'userId' })
+  user: User;
+
+  @Column({ nullable: true })
+  userId: number;
 
   @ManyToMany(() => Candidate, (candidate) => candidate.leaders)
   candidates: Candidate[];

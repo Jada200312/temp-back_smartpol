@@ -1,4 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+} from 'typeorm';
+import { Role } from './role.entity';
+import { UserPermission } from './user-permission.entity';
 
 @Entity('users')
 export class User {
@@ -10,6 +21,16 @@ export class User {
 
   @Column()
   password: string;
+
+  @Column({ nullable: true })
+  roleId: number;
+
+  @ManyToOne(() => Role, (role) => role.users, { nullable: true })
+  @JoinColumn({ name: 'roleId' })
+  role: Role;
+
+  @OneToMany(() => UserPermission, (up) => up.user)
+  permissions: UserPermission[];
 
   @CreateDateColumn()
   createdAt: Date;

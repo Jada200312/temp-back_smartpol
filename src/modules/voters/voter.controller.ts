@@ -18,6 +18,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { VoterService } from './voter.service';
+import { Permission } from '../../permissions/permission.decorator';
 import { CreateVoterDto } from './dto/create-voter.dto';
 import { UpdateVoterDto } from './dto/update-voter.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
@@ -35,6 +36,7 @@ export class VoterController {
   constructor(private readonly voterService: VoterService) {}
 
   @Post()
+  @Permission('voters:create')
   @ApiOperation({
     summary: 'Create a new voter',
     description: 'Register a new voter in the system',
@@ -98,6 +100,7 @@ export class VoterController {
   }
 
   @Get()
+  @Permission('voters:read')
   @ApiOperation({
     summary: 'Get all voters with pagination',
     description: 'Returns a paginated list of registered voters',
@@ -127,23 +130,29 @@ export class VoterController {
   }
 
   @Get('by-identification/:identification')
+  @Permission('voters:read')
   @ApiParam({
     name: 'identification',
     description: 'Voter identification number',
+  })
+  @ApiOperation({
+    summary: 'Find voter by identification',
+    description:
+      'Search for a voter using their identification number. Returns null if not found.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Voter found or null if not exists',
   })
   async findByIdentification(
     @Param('identification') identification: string,
   ): Promise<any> {
     const voter = await this.voterService.findByIdentification(identification);
-    if (!voter) {
-      throw new NotFoundException(
-        `Voter with identification ${identification} not found`,
-      );
-    }
-    return voter;
+    return voter || null;
   }
 
   @Get(':id')
+  @Permission('voters:read')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -163,6 +172,7 @@ export class VoterController {
   }
 
   @Patch(':id')
+  @Permission('voters:update')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -197,6 +207,7 @@ export class VoterController {
   }
 
   @Delete(':id')
+  @Permission('voters:delete')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -216,6 +227,7 @@ export class VoterController {
   }
 
   @Post(':voterId/assign-candidate')
+  @Permission('voters:create')
   @ApiParam({
     name: 'voterId',
     type: 'number',
@@ -304,6 +316,7 @@ export class VoterController {
   }
 
   @Get(':voterId/assign-candidate')
+  @Permission('voters:read')
   @ApiParam({
     name: 'voterId',
     type: 'number',
@@ -349,6 +362,7 @@ export class VoterController {
   }
 
   @Patch(':voterId/assign-candidate')
+  @Permission('voters:update')
   @ApiParam({
     name: 'voterId',
     type: 'number',
@@ -435,6 +449,7 @@ export class VoterController {
   }
 
   @Get('report/general')
+  @Permission('voters:read')
   @ApiOperation({
     summary: 'Get voter report with filters and aggregations',
     description:

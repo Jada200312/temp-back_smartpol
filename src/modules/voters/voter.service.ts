@@ -149,19 +149,13 @@ export class VoterService {
     return voter;
   }
 
-  async findByIdentification(identification: string): Promise<Voter> {
+  async findByIdentification(identification: string): Promise<Voter | null> {
     const voter = await this.voterRepository.findOne({
       where: { identification },
       relations: ['department', 'municipality', 'votingBooth'],
     });
 
-    if (!voter) {
-      throw new NotFoundException(
-        `Votante con identificación ${identification} no encontrado`,
-      );
-    }
-
-    return voter;
+    return voter || null;
   }
 
   async update(id: number, updateVoterDto: UpdateVoterDto): Promise<Voter> {
@@ -557,42 +551,38 @@ export class VoterService {
   }
 
   private async getAggregations(filters: VoterReportFilterDto): Promise<any> {
-    // Agregación por género
+    // Función helper para aplicar filtros comunes
+    const applyFilters = (query: any) => {
+      if (filters.votingBoothId) {
+        const votingBoothId = parseInt(filters.votingBoothId as any);
+        if (!isNaN(votingBoothId)) {
+          query = query.andWhere('voter.votingBoothId = :votingBoothId', {
+            votingBoothId,
+          });
+        }
+      }
+
+      if (filters.votingTableId) {
+        const votingTableId = parseInt(filters.votingTableId as any);
+        if (!isNaN(votingTableId)) {
+          query = query.andWhere('voter.votingTableId = :votingTableId', {
+            votingTableId,
+          });
+        }
+      }
+
+      return query;
+    };
+
+    // Crear todas las queries de agregación
     let genderQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.voter', 'voter')
       .select('voter.gender', 'gender')
       .addSelect('COUNT(DISTINCT voter.id)', 'count')
       .groupBy('voter.gender');
+    genderQuery = applyFilters(genderQuery);
 
-    // Aplicar filtros a agregaciones
-    if (filters.votingBoothId) {
-      const votingBoothId = parseInt(filters.votingBoothId as any);
-      if (!isNaN(votingBoothId)) {
-        genderQuery = genderQuery.andWhere(
-          'voter.votingBoothId = :votingBoothId',
-          {
-            votingBoothId,
-          },
-        );
-      }
-    }
-
-    if (filters.votingTableId) {
-      const votingTableId = parseInt(filters.votingTableId as any);
-      if (!isNaN(votingTableId)) {
-        genderQuery = genderQuery.andWhere(
-          'voter.votingTableId = :votingTableId',
-          {
-            votingTableId,
-          },
-        );
-      }
-    }
-
-    const genderCount = await genderQuery.getRawMany();
-
-    // Agregación por líder
     let leaderQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.leader', 'leader')
@@ -602,34 +592,8 @@ export class VoterService {
       .addSelect('COUNT(DISTINCT cv.voterId)', 'count')
       .groupBy('leader.id')
       .addGroupBy('leader.name');
+    leaderQuery = applyFilters(leaderQuery);
 
-    if (filters.votingBoothId) {
-      const votingBoothId = parseInt(filters.votingBoothId as any);
-      if (!isNaN(votingBoothId)) {
-        leaderQuery = leaderQuery.andWhere(
-          'voter.votingBoothId = :votingBoothId',
-          {
-            votingBoothId,
-          },
-        );
-      }
-    }
-
-    if (filters.votingTableId) {
-      const votingTableId = parseInt(filters.votingTableId as any);
-      if (!isNaN(votingTableId)) {
-        leaderQuery = leaderQuery.andWhere(
-          'voter.votingTableId = :votingTableId',
-          {
-            votingTableId,
-          },
-        );
-      }
-    }
-
-    const leaderCount = await leaderQuery.getRawMany();
-
-    // Agregación por candidato
     let candidateQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.candidate', 'candidate')
@@ -642,34 +606,8 @@ export class VoterService {
       .groupBy('candidate.id')
       .addGroupBy('candidate.name')
       .addGroupBy('corporation.name');
+    candidateQuery = applyFilters(candidateQuery);
 
-    if (filters.votingBoothId) {
-      const votingBoothId = parseInt(filters.votingBoothId as any);
-      if (!isNaN(votingBoothId)) {
-        candidateQuery = candidateQuery.andWhere(
-          'voter.votingBoothId = :votingBoothId',
-          {
-            votingBoothId,
-          },
-        );
-      }
-    }
-
-    if (filters.votingTableId) {
-      const votingTableId = parseInt(filters.votingTableId as any);
-      if (!isNaN(votingTableId)) {
-        candidateQuery = candidateQuery.andWhere(
-          'voter.votingTableId = :votingTableId',
-          {
-            votingTableId,
-          },
-        );
-      }
-    }
-
-    const candidateCount = await candidateQuery.getRawMany();
-
-    // Agregación por ubicación (departamento/municipio)
     let locationQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.voter', 'voter')
@@ -684,32 +622,16 @@ export class VoterService {
       .addGroupBy('department.name')
       .addGroupBy('municipality.id')
       .addGroupBy('municipality.name');
+    locationQuery = applyFilters(locationQuery);
 
-    if (filters.votingBoothId) {
-      const votingBoothId = parseInt(filters.votingBoothId as any);
-      if (!isNaN(votingBoothId)) {
-        locationQuery = locationQuery.andWhere(
-          'voter.votingBoothId = :votingBoothId',
-          {
-            votingBoothId,
-          },
-        );
-      }
-    }
-
-    if (filters.votingTableId) {
-      const votingTableId = parseInt(filters.votingTableId as any);
-      if (!isNaN(votingTableId)) {
-        locationQuery = locationQuery.andWhere(
-          'voter.votingTableId = :votingTableId',
-          {
-            votingTableId,
-          },
-        );
-      }
-    }
-
-    const locationCount = await locationQuery.getRawMany();
+    // Ejecutar todas las queries en PARALELO
+    const [genderCount, leaderCount, candidateCount, locationCount] =
+      await Promise.all([
+        genderQuery.getRawMany(),
+        leaderQuery.getRawMany(),
+        candidateQuery.getRawMany(),
+        locationQuery.getRawMany(),
+      ]);
 
     return {
       byGender: genderCount,

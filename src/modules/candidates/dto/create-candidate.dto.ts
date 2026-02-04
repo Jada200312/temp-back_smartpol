@@ -1,36 +1,44 @@
-import { IsString, IsNumber, IsNotEmpty } from 'class-validator';
+import { IsString, IsNumber, IsNotEmpty, IsOptional } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateCandidateDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Juan Duarte',
-    description: 'Candidate name (required)'
+    description: 'Candidate name (required)',
   })
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Partido Colombiano',
-    description: 'Political party name (required)'
+    description: 'Political party name (required)',
   })
   @IsString()
   @IsNotEmpty()
   party: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 1,
-    description: 'Candidate ballot number (required, must be an integer)'
+    description: 'Candidate ballot number (required, must be an integer)',
   })
   @IsNumber()
   @IsNotEmpty()
   number: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 1,
-    description: 'Corporation ID that the candidate represents (required)'
+    description: 'Corporation ID that the candidate represents (required)',
   })
   @IsNumber()
   @IsNotEmpty()
   corporation_id: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'User ID associated with the candidate (optional)',
+  })
+  @IsNumber()
+  @IsOptional()
+  userId?: number;
 }

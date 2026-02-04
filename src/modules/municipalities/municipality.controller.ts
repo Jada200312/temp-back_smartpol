@@ -1,12 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
   ApiParam,
-  ApiBody
+  ApiBody,
 } from '@nestjs/swagger';
 import { MunicipalityService } from './municipality.service';
+import { Permission } from '../../permissions/permission.decorator';
 import { CreateMunicipalityDto } from './dto/create-municipality.dto';
 import { UpdateMunicipalityDto } from './dto/update-municipality.dto';
 import { Municipality } from '../../database/entities/municipality.entity';
@@ -17,9 +26,10 @@ export class MunicipalityController {
   constructor(private readonly municipalityService: MunicipalityService) {}
 
   @Post()
-  @ApiOperation({ 
+  @Permission('municipalities:create')
+  @ApiOperation({
     summary: 'Create a new municipality',
-    description: 'Register a new municipality in the system'
+    description: 'Register a new municipality in the system',
   })
   @ApiBody({
     type: CreateMunicipalityDto,
@@ -29,14 +39,14 @@ export class MunicipalityController {
         value: {
           name: 'Ovejas',
           code: '70001',
-          departmentId: 1
+          departmentId: 1,
         },
-        description: 'Example of creating a municipality'
-      }
-    }
+        description: 'Example of creating a municipality',
+      },
+    },
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Municipality created successfully',
     schema: {
       example: {
@@ -45,21 +55,25 @@ export class MunicipalityController {
         code: '70001',
         departmentId: 1,
         createdAt: '2024-01-28T10:30:00Z',
-        updatedAt: '2024-01-28T10:30:00Z'
-      }
-    }
+        updatedAt: '2024-01-28T10:30:00Z',
+      },
+    },
   })
-  async create(@Body() createMunicipalityDto: CreateMunicipalityDto): Promise<Municipality> {
+  async create(
+    @Body() createMunicipalityDto: CreateMunicipalityDto,
+  ): Promise<Municipality> {
     return await this.municipalityService.create(createMunicipalityDto);
   }
 
   @Get()
-  @ApiOperation({ 
+  @Permission('municipalities:read')
+  @ApiOperation({
     summary: 'Get all municipalities',
-    description: 'Returns the complete list of municipalities with their departments'
+    description:
+      'Returns the complete list of municipalities with their departments',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'List of municipalities retrieved successfully',
     schema: {
       example: [
@@ -69,28 +83,29 @@ export class MunicipalityController {
           code: '70001',
           departmentId: 1,
           createdAt: '2024-01-28T10:30:00Z',
-          updatedAt: '2024-01-28T10:30:00Z'
-        }
-      ]
-    }
+          updatedAt: '2024-01-28T10:30:00Z',
+        },
+      ],
+    },
   })
   async findAll(): Promise<Municipality[]> {
     return await this.municipalityService.findAll();
   }
 
   @Get('by-department/:departmentId')
+  @Permission('municipalities:read')
   @ApiParam({
     name: 'departmentId',
     type: 'number',
     description: 'Department ID',
-    example: 1
+    example: 1,
   })
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get municipalities by department',
-    description: 'Returns all municipalities of a specific department'
+    description: 'Returns all municipalities of a specific department',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'List of municipalities retrieved successfully',
     schema: {
       example: [
@@ -100,28 +115,31 @@ export class MunicipalityController {
           code: '70001',
           departmentId: 1,
           createdAt: '2024-01-28T10:30:00Z',
-          updatedAt: '2024-01-28T10:30:00Z'
-        }
-      ]
-    }
+          updatedAt: '2024-01-28T10:30:00Z',
+        },
+      ],
+    },
   })
-  async findByDepartment(@Param('departmentId') departmentId: string): Promise<Municipality[]> {
+  async findByDepartment(
+    @Param('departmentId') departmentId: string,
+  ): Promise<Municipality[]> {
     return await this.municipalityService.findByDepartment(+departmentId);
   }
 
   @Get(':id')
+  @Permission('municipalities:read')
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'Municipality ID',
-    example: 1
+    example: 1,
   })
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get municipality by ID',
-    description: 'Returns a specific municipality'
+    description: 'Returns a specific municipality',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Municipality found',
     schema: {
       example: {
@@ -130,24 +148,25 @@ export class MunicipalityController {
         code: '70001',
         departmentId: 1,
         createdAt: '2024-01-28T10:30:00Z',
-        updatedAt: '2024-01-28T10:30:00Z'
-      }
-    }
+        updatedAt: '2024-01-28T10:30:00Z',
+      },
+    },
   })
   async findOne(@Param('id') id: string): Promise<Municipality | null> {
     return await this.municipalityService.findOne(+id);
   }
 
   @Patch(':id')
+  @Permission('municipalities:update')
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'Municipality ID',
-    example: 1
+    example: 1,
   })
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Update a municipality',
-    description: 'Update municipality information'
+    description: 'Update municipality information',
   })
   @ApiBody({
     type: UpdateMunicipalityDto,
@@ -155,14 +174,14 @@ export class MunicipalityController {
     examples: {
       example1: {
         value: {
-          name: 'Ovejas'
+          name: 'Ovejas',
         },
-        description: 'Example of updating municipality name'
-      }
-    }
+        description: 'Example of updating municipality name',
+      },
+    },
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Municipality updated successfully',
     schema: {
       example: {
@@ -171,9 +190,9 @@ export class MunicipalityController {
         code: '70001',
         departmentId: 1,
         createdAt: '2024-01-28T10:30:00Z',
-        updatedAt: '2024-01-28T10:30:01Z'
-      }
-    }
+        updatedAt: '2024-01-28T10:30:01Z',
+      },
+    },
   })
   async update(
     @Param('id') id: string,
@@ -183,19 +202,20 @@ export class MunicipalityController {
   }
 
   @Delete(':id')
+  @Permission('municipalities:delete')
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'Municipality ID',
-    example: 1
+    example: 1,
   })
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Delete a municipality',
-    description: 'Delete a municipality from the system'
+    description: 'Delete a municipality from the system',
   })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Municipality deleted successfully'
+  @ApiResponse({
+    status: 200,
+    description: 'Municipality deleted successfully',
   })
   async remove(@Param('id') id: string): Promise<void> {
     return await this.municipalityService.remove(+id);
