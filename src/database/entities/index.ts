@@ -1,5 +1,9 @@
 // Index file to export all entities
 export { User } from './user.entity';
+export { Role } from './role.entity';
+export { Permission } from './permission.entity';
+export { RolePermission } from './role-permission.entity';
+export { UserPermission } from './user-permission.entity';
 export { Candidate } from './candidate.entity';
 export { Leader } from './leader.entity';
 export { Corporation } from './corporation.entity';

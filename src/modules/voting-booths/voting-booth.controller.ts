@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { VotingBoothService } from './voting-booth.service';
+import { Permission } from '../../permissions/permission.decorator';
 import { CreateVotingBoothDto } from './dto/create-voting-booth.dto';
 import { UpdateVotingBoothDto } from './dto/update-voting-booth.dto';
 import { VotingBoothResponseDto } from './dto/voting-booth-response.dto';
@@ -20,6 +21,7 @@ export class VotingBoothController {
   constructor(private readonly votingBoothService: VotingBoothService) {}
 
   @Post()
+  @Permission('voting-booths:create')
   @ApiOperation({ summary: 'Crear nuevo puesto de votación' })
   @ApiResponse({
     status: 201,
@@ -31,6 +33,7 @@ export class VotingBoothController {
   }
 
   @Get()
+  @Permission('voting-booths:read')
   @ApiOperation({ summary: 'Obtener todos los puestos de votación' })
   @ApiResponse({
     status: 200,
@@ -42,6 +45,7 @@ export class VotingBoothController {
   }
 
   @Get('by-municipality/:municipalityId')
+  @Permission('voting-booths:read')
   @ApiOperation({ summary: 'Obtener puestos por municipio' })
   @ApiResponse({
     status: 200,
@@ -55,6 +59,7 @@ export class VotingBoothController {
   }
 
   @Get(':id')
+  @Permission('voting-booths:read')
   @ApiOperation({ summary: 'Obtener puesto por ID' })
   @ApiResponse({
     status: 200,
@@ -66,6 +71,7 @@ export class VotingBoothController {
   }
 
   @Patch(':id')
+  @Permission('voting-booths:update')
   @ApiOperation({ summary: 'Actualizar puesto de votación' })
   @ApiResponse({
     status: 200,
@@ -80,6 +86,7 @@ export class VotingBoothController {
   }
 
   @Delete(':id')
+  @Permission('voting-booths:delete')
   @ApiOperation({ summary: 'Eliminar puesto de votación' })
   @ApiResponse({ status: 200, description: 'Puesto eliminado' })
   remove(@Param('id', ParseIntPipe) id: number) {

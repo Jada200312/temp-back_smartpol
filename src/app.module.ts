@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
@@ -13,8 +14,11 @@ import { DepartmentModule } from './modules/departments/department.module';
 import { MunicipalityModule } from './modules/municipalities/municipality.module';
 import { VotingBoothModule } from './modules/voting-booths/voting-booth.module';
 import { VotingTableModule } from './modules/voting-tables/voting-table.module';
+import { PermissionsModule } from './permissions/permissions.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import {
   User,
+  Role,
   Candidate,
   Leader,
   Corporation,
@@ -24,6 +28,9 @@ import {
   CandidateVoter,
   VotingBooth,
   VotingTable,
+  Permission,
+  RolePermission,
+  UserPermission,
 } from './database/entities';
 
 @Module({
@@ -41,6 +48,7 @@ import {
       database: process.env.DB_DATABASE || 'temp-smartpol_db',
       entities: [
         User,
+        Role,
         Candidate,
         Leader,
         Corporation,
@@ -50,12 +58,16 @@ import {
         CandidateVoter,
         VotingBooth,
         VotingTable,
+        Permission,
+        RolePermission,
+        UserPermission,
       ],
       synchronize: false,
       logging: false,
     }),
     TypeOrmModule.forFeature([
       User,
+      Role,
       Candidate,
       Leader,
       Corporation,
@@ -65,6 +77,9 @@ import {
       CandidateVoter,
       VotingBooth,
       VotingTable,
+      Permission,
+      RolePermission,
+      UserPermission,
     ]),
     AuthModule,
     CorporationModule,
@@ -76,8 +91,15 @@ import {
     MunicipalityModule,
     VotingBoothModule,
     VotingTableModule,
+    PermissionsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {}

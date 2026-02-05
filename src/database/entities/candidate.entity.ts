@@ -12,6 +12,7 @@ import {
 import { Corporation } from './corporation.entity';
 import { Leader } from './leader.entity';
 import { Voter } from './voter.entity';
+import { User } from './user.entity';
 
 @Entity('candidates')
 export class Candidate {
@@ -34,7 +35,17 @@ export class Candidate {
   @Column()
   corporation_id: number;
 
-  @ManyToMany(() => Leader, (leader) => leader.candidates, { cascade: true })
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'userId' })
+  user: User;
+
+  @Column({ nullable: true })
+  userId: number;
+
+  @ManyToMany(() => Leader, (leader) => leader.candidates, {
+    cascade: true,
+    onDelete: 'CASCADE',
+  })
   @JoinTable({
     name: 'candidate_leader',
     joinColumn: { name: 'candidate_id', referencedColumnName: 'id' },

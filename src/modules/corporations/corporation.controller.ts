@@ -1,12 +1,21 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
-import { 
-  ApiTags, 
-  ApiOperation, 
-  ApiResponse, 
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
   ApiParam,
-  ApiBody
+  ApiBody,
 } from '@nestjs/swagger';
 import { CorporationService } from './corporation.service';
+import { Permission } from '../../permissions/permission.decorator';
 import { CreateCorporationDto } from './dto/create-corporation.dto';
 import { UpdateCorporationDto } from './dto/update-corporation.dto';
 import { Corporation } from '../../database/entities/corporation.entity';
@@ -17,9 +26,10 @@ export class CorporationController {
   constructor(private readonly corporationService: CorporationService) {}
 
   @Post()
-  @ApiOperation({ 
+  @Permission('corporations:create')
+  @ApiOperation({
     summary: 'Create a new corporation',
-    description: 'Register a new corporation in the system'
+    description: 'Register a new corporation in the system',
   })
   @ApiBody({
     type: CreateCorporationDto,
@@ -27,35 +37,38 @@ export class CorporationController {
     examples: {
       example1: {
         value: {
-          name: 'Corporación XYZ'
+          name: 'Corporación XYZ',
         },
-        description: 'Example of creating a corporation'
-      }
-    }
+        description: 'Example of creating a corporation',
+      },
+    },
   })
-  @ApiResponse({ 
-    status: 201, 
+  @ApiResponse({
+    status: 201,
     description: 'Corporation created successfully',
     schema: {
       example: {
         id: 1,
         name: 'Corporación XYZ',
         createdAt: '2024-01-27T10:30:00Z',
-        updatedAt: '2024-01-27T10:30:00Z'
-      }
-    }
+        updatedAt: '2024-01-27T10:30:00Z',
+      },
+    },
   })
-  async create(@Body() createCorporationDto: CreateCorporationDto): Promise<Corporation> {
+  async create(
+    @Body() createCorporationDto: CreateCorporationDto,
+  ): Promise<Corporation> {
     return await this.corporationService.create(createCorporationDto);
   }
 
   @Get()
-  @ApiOperation({ 
+  @Permission('corporations:read')
+  @ApiOperation({
     summary: 'Get all corporations',
-    description: 'Returns the complete list of registered corporations'
+    description: 'Returns the complete list of registered corporations',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'List of corporations retrieved successfully',
     schema: {
       example: [
@@ -63,52 +76,54 @@ export class CorporationController {
           id: 1,
           name: 'Corporación XYZ',
           createdAt: '2024-01-27T10:30:00Z',
-          updatedAt: '2024-01-27T10:30:00Z'
-        }
-      ]
-    }
+          updatedAt: '2024-01-27T10:30:00Z',
+        },
+      ],
+    },
   })
   async findAll(): Promise<Corporation[]> {
     return await this.corporationService.findAll();
   }
 
   @Get(':id')
+  @Permission('corporations:read')
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'Corporation ID',
-    example: 1
+    example: 1,
   })
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Get corporation by ID',
-    description: 'Returns a specific corporation'
+    description: 'Returns a specific corporation',
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Corporation found',
     schema: {
       example: {
         id: 1,
         name: 'Corporación XYZ',
         createdAt: '2024-01-27T10:30:00Z',
-        updatedAt: '2024-01-27T10:30:00Z'
-      }
-    }
+        updatedAt: '2024-01-27T10:30:00Z',
+      },
+    },
   })
   async findOne(@Param('id') id: string): Promise<Corporation | null> {
     return await this.corporationService.findOne(+id);
   }
 
   @Patch(':id')
+  @Permission('corporations:update')
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'Corporation ID',
-    example: 1
+    example: 1,
   })
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Update a corporation',
-    description: 'Update corporation information'
+    description: 'Update corporation information',
   })
   @ApiBody({
     type: UpdateCorporationDto,
@@ -116,23 +131,23 @@ export class CorporationController {
     examples: {
       example1: {
         value: {
-          name: 'Corporación ABC Updated'
+          name: 'Corporación ABC Updated',
         },
-        description: 'Example of updating corporation name'
-      }
-    }
+        description: 'Example of updating corporation name',
+      },
+    },
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Corporation updated successfully',
     schema: {
       example: {
         id: 1,
         name: 'Corporación ABC Updated',
         createdAt: '2024-01-27T10:30:00Z',
-        updatedAt: '2024-01-27T10:30:01Z'
-      }
-    }
+        updatedAt: '2024-01-27T10:30:01Z',
+      },
+    },
   })
   async update(
     @Param('id') id: string,
@@ -142,19 +157,20 @@ export class CorporationController {
   }
 
   @Delete(':id')
+  @Permission('corporations:delete')
   @ApiParam({
     name: 'id',
     type: 'number',
     description: 'Corporation ID',
-    example: 1
+    example: 1,
   })
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Delete a corporation',
-    description: 'Delete a corporation from the system'
+    description: 'Delete a corporation from the system',
   })
-  @ApiResponse({ 
-    status: 200, 
-    description: 'Corporation deleted successfully'
+  @ApiResponse({
+    status: 200,
+    description: 'Corporation deleted successfully',
   })
   async remove(@Param('id') id: string): Promise<void> {
     return await this.corporationService.remove(+id);

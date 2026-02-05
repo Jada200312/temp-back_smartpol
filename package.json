@@ -20,7 +20,10 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:leaders": "ts-node seed-leaders.ts",
     "seed:candidate-leaders": "ts-node seed-candidate-leaders.ts",
-    "verify:candidate-leaders": "ts-node verify-candidate-leaders.ts"
+    "verify:candidate-leaders": "ts-node verify-candidate-leaders.ts",
+    "update:passwords": "ts-node update-passwords.ts",
+    "reset:passwords": "ts-node reset-passwords.ts",
+    "update:digitadores": "ts-node update-digitadores.ts"
   },
   "dependencies": {
     "@nestjs/cli":"^10.0.0",
