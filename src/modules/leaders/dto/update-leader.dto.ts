@@ -1,36 +1,44 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsNumber } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateLeaderDto {
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Juan López',
-    description: 'Leader name (optional)'
+    description: 'Leader name (optional)',
   })
   @IsString()
   @IsOptional()
   name?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: '12345678',
-    description: 'Leader identification document (optional)'
+    description: 'Leader identification document (optional)',
   })
   @IsString()
   @IsOptional()
   document?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: 'Bogotá',
-    description: 'Municipality where the leader is from (optional)'
+    description: 'Municipality where the leader is from (optional)',
   })
   @IsString()
   @IsOptional()
   municipality?: string;
 
-  @ApiProperty({ 
+  @ApiProperty({
     example: '+57 312 123 4567',
-    description: 'Leader phone number (optional)'
+    description: 'Leader phone number (optional)',
   })
   @IsString()
   @IsOptional()
   phone?: string;
+
+  @ApiProperty({
+    example: 1,
+    description: 'User ID associated with the leader (optional)',
+  })
+  @IsNumber()
+  @IsOptional()
+  userId?: number;
 }
