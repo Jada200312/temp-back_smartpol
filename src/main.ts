@@ -7,14 +7,14 @@ function parseOrigins(env?: string) {
   if (!env) return null;
   return env
     .split(',')
-    .map((o) => o.trim())
+    .map(o => o.trim())
     .filter(Boolean);
 }
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const origins = parseOrigins(process.env.CORS_ORIGIN);
+  const origins = parseOrigins(process.env.CORS_ORIGIN);  
   app.enableCors({
     origin: origins?.length
       ? origins
@@ -29,29 +29,23 @@ async function bootstrap() {
     credentials: false, // ✅ JWT Bearer => sin cookies
   });
 
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+
+  app.useGlobalPipes(new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+    transform: true,
+  }));
 
   const config = new DocumentBuilder()
     .setTitle('SmartPol API')
-    .setDescription(
-      'RESTful API for managing political campaigns, candidates, leaders and voters',
-    )
+    .setDescription('RESTful API for managing political campaigns, candidates, leaders and voters')
     .setVersion('1.0.0')
     .addBearerAuth(
       { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
-      'access-token',
+      'access-token'
     )
     .addTag('System', 'API status and health')
-    .addTag(
-      'Authentication',
-      'Authentication, registration and JWT session management',
-    )
+    .addTag('Authentication', 'Authentication, registration and JWT session management')
     .addTag('Corporations', 'Management of corporations and political groups')
     .addTag('Users', 'System user management')
     .addTag('Leaders', 'Management of political leaders and referents')
@@ -60,11 +54,11 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  SwaggerModule.setup('docs', app, document); 
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   console.log(`✓ Application running on: http://localhost:${port}`);
-  console.log(`✓ Swagger documentation: http://localhost:${port}/docs`);
+  console.log(`✓ Swagger documentation: http://localhost:${port}/api/docs`);
 }
 bootstrap();
