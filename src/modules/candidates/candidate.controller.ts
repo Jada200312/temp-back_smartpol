@@ -145,6 +145,32 @@ export class CandidateController {
     return await this.candidateService.findOne(+id);
   }
 
+  @Get('by-user/:userId')
+  @Permission('candidates:read')
+  @ApiParam({
+    name: 'userId',
+    type: 'number',
+    description: 'User ID',
+    example: 1,
+  })
+  @ApiOperation({
+    summary: 'Get candidate by user ID',
+    description: 'Returns the candidate associated with a specific user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Candidate found',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate not found for this user',
+  })
+  async findByUserId(
+    @Param('userId') userId: string,
+  ): Promise<Candidate | null> {
+    return await this.candidateService.findByUserId(+userId);
+  }
+
   @Patch(':id')
   @Permission('candidates:update')
   @ApiParam({

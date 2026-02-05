@@ -77,6 +77,13 @@ export class CandidateService {
     });
   }
 
+  async findByUserId(userId: number): Promise<Candidate | null> {
+    return await this.candidateRepository.findOne({
+      where: { userId },
+      relations: ['corporation', 'leaders'],
+    });
+  }
+
   async update(
     id: number,
     updateCandidateDto: UpdateCandidateDto,

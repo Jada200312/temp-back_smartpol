@@ -136,6 +136,70 @@ export class VoterService {
     };
   }
 
+  async findByCandidatePaginated(
+    candidateId: number,
+    paginationQueryDto: PaginationQueryDto,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    const { page = 1, limit = 20 } = paginationQueryDto;
+    const skip = (page - 1) * limit;
+
+    const query = this.voterRepository
+      .createQueryBuilder('voter')
+      .leftJoinAndSelect('voter.department', 'department')
+      .leftJoinAndSelect('voter.municipality', 'municipality')
+      .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
+      .innerJoin('candidate_voter', 'cv', 'cv.voter_id = voter.id')
+      .where('cv.candidate_id = :candidateId', { candidateId });
+
+    const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+
+    const pages = Math.ceil(total / limit);
+    const hasNextPage = page < pages;
+    const hasPreviousPage = page > 1;
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      pages,
+      hasNextPage,
+      hasPreviousPage,
+    };
+  }
+
+  async findByLeaderPaginated(
+    leaderId: number,
+    paginationQueryDto: PaginationQueryDto,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    const { page = 1, limit = 20 } = paginationQueryDto;
+    const skip = (page - 1) * limit;
+
+    const query = this.voterRepository
+      .createQueryBuilder('voter')
+      .leftJoinAndSelect('voter.department', 'department')
+      .leftJoinAndSelect('voter.municipality', 'municipality')
+      .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
+      .innerJoin('candidate_voter', 'cv', 'cv.voter_id = voter.id')
+      .where('cv.leader_id = :leaderId', { leaderId });
+
+    const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+
+    const pages = Math.ceil(total / limit);
+    const hasNextPage = page < pages;
+    const hasPreviousPage = page > 1;
+
+    return {
+      data,
+      page,
+      limit,
+      total,
+      pages,
+      hasNextPage,
+      hasPreviousPage,
+    };
+  }
+
   async findOne(id: number): Promise<Voter> {
     const voter = await this.voterRepository.findOne({
       where: { id },

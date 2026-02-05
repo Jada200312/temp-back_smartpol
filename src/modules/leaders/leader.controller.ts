@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -64,8 +65,11 @@ export class LeaderController {
       },
     },
   })
-  async create(@Body() createLeaderDto: CreateLeaderDto): Promise<Leader> {
-    return await this.leaderService.create(createLeaderDto);
+  async create(
+    @Body() createLeaderDto: CreateLeaderDto,
+    @Request() req: any,
+  ): Promise<Leader> {
+    return await this.leaderService.create(createLeaderDto, req.user);
   }
 
   @Get()
@@ -111,6 +115,82 @@ export class LeaderController {
       limitNum,
       search,
     );
+  }
+
+  @Get('by-candidate/:candidateId')
+  @Permission('leaders:read')
+  @ApiParam({
+    name: 'candidateId',
+    type: 'number',
+    description: 'Candidate ID',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'page',
+    type: 'number',
+    required: false,
+    description: 'Page number (starts at 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Items per page',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'search',
+    type: 'string',
+    required: false,
+    description: 'Search by name, document or municipality (case-insensitive)',
+  })
+  @ApiOperation({
+    summary: 'Get leaders by candidate with pagination',
+    description:
+      'Returns a paginated list of leaders associated with a specific candidate',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of leaders for the candidate retrieved successfully',
+  })
+  async findByCandidate(
+    @Param('candidateId') candidateId: string,
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+    return await this.leaderService.findByCandidateWithPagination(
+      +candidateId,
+      pageNum,
+      limitNum,
+      search,
+    );
+  }
+
+  @Get('by-user/:userId')
+  @ApiParam({
+    name: 'userId',
+    type: 'number',
+    description: 'User ID',
+    example: 1,
+  })
+  @ApiOperation({
+    summary: 'Get leader by user ID',
+    description: 'Returns the leader associated with a specific user',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Leader found successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Leader not found for the given user ID',
+  })
+  async findByUserId(@Param('userId') userId: string): Promise<Leader | null> {
+    return await this.leaderService.findByUserId(+userId);
   }
 
   @Get(':id')

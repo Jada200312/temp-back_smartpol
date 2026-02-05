@@ -129,6 +129,88 @@ export class VoterController {
     return await this.voterService.findAllPaginated(paginationQueryDto);
   }
 
+  @Get('by-candidate/:candidateId')
+  @Permission('voters:read')
+  @ApiParam({
+    name: 'candidateId',
+    type: 'number',
+    description: 'Candidate ID',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'page',
+    type: Number,
+    required: false,
+    example: 1,
+    description: 'Page number (starting from 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: Number,
+    required: false,
+    example: 20,
+    description: 'Number of items per page (max 100)',
+  })
+  @ApiOperation({
+    summary: 'Get voters by candidate with pagination',
+    description:
+      'Returns a paginated list of voters assigned to a specific candidate',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of voters for the candidate retrieved successfully',
+  })
+  async findByCandidate(
+    @Param('candidateId') candidateId: string,
+    @Query() paginationQueryDto: PaginationQueryDto,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    return await this.voterService.findByCandidatePaginated(
+      +candidateId,
+      paginationQueryDto,
+    );
+  }
+
+  @Get('by-leader/:leaderId')
+  @Permission('voters:read')
+  @ApiParam({
+    name: 'leaderId',
+    type: 'number',
+    description: 'Leader ID',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'page',
+    type: Number,
+    required: false,
+    example: 1,
+    description: 'Page number (starting from 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: Number,
+    required: false,
+    example: 20,
+    description: 'Number of items per page (max 100)',
+  })
+  @ApiOperation({
+    summary: 'Get voters by leader with pagination',
+    description:
+      'Returns a paginated list of voters assigned to a specific leader',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of voters for the leader retrieved successfully',
+  })
+  async findByLeader(
+    @Param('leaderId') leaderId: string,
+    @Query() paginationQueryDto: PaginationQueryDto,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    return await this.voterService.findByLeaderPaginated(
+      +leaderId,
+      paginationQueryDto,
+    );
+  }
+
   @Get('by-identification/:identification')
   @Permission('voters:read')
   @ApiParam({
