@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict hUe8mkJleOzXKaJLfbeJ7j3ktIdcPG2N5IQnwZuIzqfDxqDyjd1vECd8676uon7
+\restrict IRHwI0FfDS9uWjHgdk9RquF984MwnBXTVs1IdrY8qNtA4NsnehYTSRUVp9W2SYt
 
 -- Dumped from database version 18.0
 -- Dumped by pg_dump version 18.0
@@ -578,9 +578,7 @@ ALTER TABLE ONLY public.voting_booths ALTER COLUMN id SET DEFAULT nextval('publi
 --
 
 COPY public.candidate_leader (candidate_id, leader_id) FROM stdin;
-6	1
 7	1
-3	1
 6	2
 7	2
 3	2
@@ -673,6 +671,7 @@ COPY public.candidate_leader (candidate_id, leader_id) FROM stdin;
 6	34
 7	34
 1	34
+6	1
 \.
 
 
@@ -2628,7 +2627,6 @@ COPY public.role_permissions ("roleId", "permissionId", "createdAt") FROM stdin;
 2	21	2026-02-03 20:27:48.355735
 2	25	2026-02-03 20:27:48.355735
 2	29	2026-02-03 20:27:48.355735
-2	33	2026-02-03 20:27:48.355735
 3	10	2026-02-03 20:27:48.358011
 3	13	2026-02-03 20:27:48.358011
 3	17	2026-02-03 20:27:48.358011
@@ -2665,6 +2663,17 @@ COPY public.role_permissions ("roleId", "permissionId", "createdAt") FROM stdin;
 2	34	2026-02-04 14:17:36.462164
 2	36	2026-02-04 14:17:37.349344
 2	37	2026-02-04 14:17:38.043739
+3	2	2026-02-04 18:40:05.561103
+3	6	2026-02-04 18:40:11.091406
+3	5	2026-02-04 18:40:17.581081
+3	35	2026-02-04 18:40:22.277518
+3	34	2026-02-04 19:06:51.336311
+2	4	2026-02-04 19:09:46.771641
+2	8	2026-02-04 19:09:50.836309
+3	9	2026-02-04 19:55:46.513962
+4	9	2026-02-04 19:58:47.474845
+4	34	2026-02-04 20:00:43.803327
+2	33	2026-02-04 20:13:38.905934
 \.
 
 
@@ -4051,7 +4060,7 @@ SELECT pg_catalog.setval('public.candidate_voter_id_seq', 692, true);
 -- Name: candidates_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.candidates_id_seq', 14, true);
+SELECT pg_catalog.setval('public.candidates_id_seq', 15, true);
 
 
 --
@@ -4072,7 +4081,7 @@ SELECT pg_catalog.setval('public.departments_id_seq', 32, true);
 -- Name: leaders_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.leaders_id_seq', 36, true);
+SELECT pg_catalog.setval('public.leaders_id_seq', 41, true);
 
 
 --
@@ -4100,7 +4109,7 @@ SELECT pg_catalog.setval('public.roles_id_seq', 6, false);
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 66, true);
+SELECT pg_catalog.setval('public.users_id_seq', 73, true);
 
 
 --
@@ -4517,5 +4526,5 @@ ALTER TABLE ONLY public.voting_booths
 -- PostgreSQL database dump complete
 --
 
-\unrestrict hUe8mkJleOzXKaJLfbeJ7j3ktIdcPG2N5IQnwZuIzqfDxqDyjd1vECd8676uon7
+\unrestrict IRHwI0FfDS9uWjHgdk9RquF984MwnBXTVs1IdrY8qNtA4NsnehYTSRUVp9W2SYt
 

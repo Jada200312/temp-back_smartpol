@@ -216,7 +216,7 @@ export class VoterService {
   async findByIdentification(identification: string): Promise<Voter | null> {
     const voter = await this.voterRepository.findOne({
       where: { identification },
-      relations: ['department', 'municipality', 'votingBooth'],
+      select: ['id', 'identification', 'firstName', 'lastName'],
     });
 
     return voter || null;
