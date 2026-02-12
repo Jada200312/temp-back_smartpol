@@ -7,11 +7,17 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Candidate } from './candidate.entity';
 import { User } from './user.entity';
 
 @Entity('leaders')
+@Index(['name'])
+@Index(['document'])
+@Index(['municipality'])
+@Index(['userId'])
+@Index(['createdAt'])
 export class Leader {
   @PrimaryGeneratedColumn()
   id: number;

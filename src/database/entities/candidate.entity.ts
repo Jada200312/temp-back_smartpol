@@ -8,6 +8,7 @@ import {
   JoinTable,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Corporation } from './corporation.entity';
 import { Leader } from './leader.entity';
@@ -15,6 +16,11 @@ import { Voter } from './voter.entity';
 import { User } from './user.entity';
 
 @Entity('candidates')
+@Index(['name'])
+@Index(['party'])
+@Index(['number'])
+@Index(['corporation_id'])
+@Index(['userId'])
 export class Candidate {
   @PrimaryGeneratedColumn()
   id: number;
