@@ -250,7 +250,7 @@ export class VoterController {
     description: 'Voter found',
   })
   async findOne(@Param('id') id: string): Promise<Voter | null> {
-    return await this.voterService.findOne(+id);
+    return await this.voterService.findOneWithAllRelations(+id);
   }
 
   @Patch(':id')

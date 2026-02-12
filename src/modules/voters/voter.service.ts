@@ -115,18 +115,24 @@ export class VoterService {
     const { page = 1, limit = 20 } = paginationQueryDto;
     const skip = (page - 1) * limit;
 
-    const [data, total] = await this.voterRepository.findAndCount({
-      skip,
-      take: limit,
-      relations: ['department', 'municipality', 'votingBooth'],
-    });
+    // Query optimizada: trae votantes con candidatos y líderes en una sola llamada
+    // Sin departamento/municipio/votingBooth para evitar N+1 queries
+    const query = this.voterRepository
+      .createQueryBuilder('voter')
+      .leftJoinAndSelect('candidate_voter', 'cv', 'cv.voter_id = voter.id')
+      .leftJoinAndSelect('cv.candidate', 'candidate')
+      .leftJoinAndSelect('cv.leader', 'leader')
+      .skip(skip)
+      .take(limit);
+
+    const [voters, total] = await query.getManyAndCount();
 
     const pages = Math.ceil(total / limit);
     const hasNextPage = page < pages;
     const hasPreviousPage = page > 1;
 
     return {
-      data,
+      data: voters,
       page,
       limit,
       total,
@@ -136,6 +142,26 @@ export class VoterService {
     };
   }
 
+  async findOneWithAllRelations(id: number): Promise<Voter> {
+    // Carga TODOS los datos necesarios para el modal de editar
+    const voter = await this.voterRepository
+      .createQueryBuilder('voter')
+      .leftJoinAndSelect('voter.department', 'department')
+      .leftJoinAndSelect('voter.municipality', 'municipality')
+      .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
+      .leftJoinAndSelect('candidate_voter', 'cv', 'cv.voter_id = voter.id')
+      .leftJoinAndSelect('cv.candidate', 'candidate')
+      .leftJoinAndSelect('cv.leader', 'leader')
+      .where('voter.id = :id', { id })
+      .getOne();
+
+    if (!voter) {
+      throw new NotFoundException(`Votante con ID ${id} no encontrado`);
+    }
+
+    return voter;
+  }
+
   async findByCandidatePaginated(
     candidateId: number,
     paginationQueryDto: PaginationQueryDto,
@@ -143,22 +169,24 @@ export class VoterService {
     const { page = 1, limit = 20 } = paginationQueryDto;
     const skip = (page - 1) * limit;
 
+    // Query optimizada con candidatos y líderes
     const query = this.voterRepository
       .createQueryBuilder('voter')
-      .leftJoinAndSelect('voter.department', 'department')
-      .leftJoinAndSelect('voter.municipality', 'municipality')
-      .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
-      .innerJoin('candidate_voter', 'cv', 'cv.voter_id = voter.id')
-      .where('cv.candidate_id = :candidateId', { candidateId });
+      .leftJoinAndSelect('candidate_voter', 'cv', 'cv.voter_id = voter.id')
+      .leftJoinAndSelect('cv.candidate', 'candidate')
+      .leftJoinAndSelect('cv.leader', 'leader')
+      .where('cv.candidate_id = :candidateId', { candidateId })
+      .skip(skip)
+      .take(limit);
 
-    const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+    const [voters, total] = await query.getManyAndCount();
 
     const pages = Math.ceil(total / limit);
     const hasNextPage = page < pages;
     const hasPreviousPage = page > 1;
 
     return {
-      data,
+      data: voters,
       page,
       limit,
       total,
@@ -175,22 +203,24 @@ export class VoterService {
     const { page = 1, limit = 20 } = paginationQueryDto;
     const skip = (page - 1) * limit;
 
+    // Query optimizada con candidatos y líderes
     const query = this.voterRepository
       .createQueryBuilder('voter')
-      .leftJoinAndSelect('voter.department', 'department')
-      .leftJoinAndSelect('voter.municipality', 'municipality')
-      .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
-      .innerJoin('candidate_voter', 'cv', 'cv.voter_id = voter.id')
-      .where('cv.leader_id = :leaderId', { leaderId });
+      .leftJoinAndSelect('candidate_voter', 'cv', 'cv.voter_id = voter.id')
+      .leftJoinAndSelect('cv.candidate', 'candidate')
+      .leftJoinAndSelect('cv.leader', 'leader')
+      .where('cv.leader_id = :leaderId', { leaderId })
+      .skip(skip)
+      .take(limit);
 
-    const [data, total] = await query.skip(skip).take(limit).getManyAndCount();
+    const [voters, total] = await query.getManyAndCount();
 
     const pages = Math.ceil(total / limit);
     const hasNextPage = page < pages;
     const hasPreviousPage = page > 1;
 
     return {
-      data,
+      data: voters,
       page,
       limit,
       total,
@@ -203,7 +233,6 @@ export class VoterService {
   async findOne(id: number): Promise<Voter> {
     const voter = await this.voterRepository.findOne({
       where: { id },
-      relations: ['department', 'municipality', 'votingBooth'],
     });
 
     if (!voter) {
@@ -295,7 +324,7 @@ export class VoterService {
 
     // Actualiza todos los campos
     await this.voterRepository.update(id, updateVoterDto);
-    return await this.findOne(id);
+    return await this.findOneWithAllRelations(id);
   }
 
   async remove(id: number): Promise<void> {
