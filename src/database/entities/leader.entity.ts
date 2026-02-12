@@ -17,7 +17,6 @@ import { User } from './user.entity';
 @Index(['document'])
 @Index(['municipality'])
 @Index(['userId'])
-@Index(['campaignId'])
 @Index(['createdAt'])
 export class Leader {
   @PrimaryGeneratedColumn()
