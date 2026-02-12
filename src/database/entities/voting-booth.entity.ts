@@ -5,11 +5,14 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  Index,
 } from 'typeorm';
 import { Municipality } from './municipality.entity';
 
 @Entity('voting_booths')
 @Unique(['code', 'municipalityId'])
+@Index(['municipalityId'])
+@Index(['code'])
 export class VotingBooth {
   @PrimaryGeneratedColumn()
   id: number;

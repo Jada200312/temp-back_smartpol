@@ -6,11 +6,14 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   Unique,
+  Index,
 } from 'typeorm';
 import { Department } from './department.entity';
 
 @Entity('municipalities')
 @Unique(['name', 'departmentId'])
+@Index(['departmentId'])
+@Index(['code'])
 export class Municipality {
   @PrimaryGeneratedColumn()
   id: number;
