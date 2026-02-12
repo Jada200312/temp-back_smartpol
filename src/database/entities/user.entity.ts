@@ -7,11 +7,14 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { Role } from './role.entity';
 import { UserPermission } from './user-permission.entity';
 
 @Entity('users')
+@Index(['email'])
+@Index(['roleId'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
