@@ -41,4 +41,13 @@ export class CreateCandidateDto {
   @IsNumber()
   @IsOptional()
   userId?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Campaign ID that the candidate belongs to (optional)',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  campaignId?: number;
 }

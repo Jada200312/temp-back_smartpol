@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Leader } from '../../database/entities/leader.entity';
 import { Candidate } from '../../database/entities/candidate.entity';
 import { User } from '../../database/entities/user.entity';
+import { Campaign } from '../../database/entities/campaigns.entity';
 import { CreateLeaderDto } from './dto/create-leader.dto';
 import { UpdateLeaderDto } from './dto/update-leader.dto';
 
@@ -16,6 +17,8 @@ export class LeaderService {
     private readonly candidateRepository: Repository<Candidate>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Campaign)
+    private readonly campaignRepository: Repository<Campaign>,
   ) {}
 
   async create(
@@ -51,11 +54,13 @@ export class LeaderService {
       }
     }
 
-    return savedLeader;
+    return (await this.findOne(savedLeader.id)) || savedLeader;
   }
 
   async findAll(): Promise<Leader[]> {
-    return await this.leaderRepository.find();
+    return await this.leaderRepository.find({
+      relations: ['campaign', 'candidates'],
+    });
   }
 
   async findAllWithPagination(
@@ -70,19 +75,15 @@ export class LeaderService {
     pages: number;
   }> {
     const skip = (page - 1) * limit;
-    const query = this.leaderRepository.createQueryBuilder('leader');
+    const query = this.leaderRepository
+      .createQueryBuilder('leader')
+      .leftJoinAndSelect('leader.campaign', 'campaign');
 
     if (search && search.trim()) {
-      query
-        .where('LOWER(leader.name) LIKE LOWER(:search)', {
-          search: `%${search}%`,
-        })
-        .orWhere('LOWER(leader.document) LIKE LOWER(:search)', {
-          search: `%${search}%`,
-        })
-        .orWhere('LOWER(leader.municipality) LIKE LOWER(:search)', {
-          search: `%${search}%`,
-        });
+      query.andWhere(
+        `(LOWER(leader.name) LIKE LOWER(:search) OR LOWER(leader.document) LIKE LOWER(:search) OR LOWER(leader.municipality) LIKE LOWER(:search))`,
+        { search: `%${search}%` },
+      );
     }
 
     const [leaders, total] = await query
@@ -97,6 +98,19 @@ export class LeaderService {
       limit,
       pages: Math.ceil(total / limit),
     };
+  }
+
+  async findByCampaignId(campaignId: number): Promise<Leader[]> {
+    if (!campaignId || isNaN(campaignId) || campaignId <= 0) {
+      throw new BadRequestException(
+        'campaignId debe ser un número positivo válido',
+      );
+    }
+
+    return await this.leaderRepository.find({
+      where: { campaignId },
+      relations: ['campaign', 'candidates'],
+    });
   }
 
   async findByCandidateWithPagination(
@@ -111,29 +125,31 @@ export class LeaderService {
     limit: number;
     pages: number;
   }> {
+    if (!candidateId || isNaN(candidateId) || candidateId <= 0) {
+      throw new BadRequestException(
+        'candidateId debe ser un número positivo válido',
+      );
+    }
+
     const skip = (page - 1) * limit;
     const query = this.leaderRepository
       .createQueryBuilder('leader')
+      .leftJoinAndSelect('leader.campaign', 'campaign')
       .innerJoin('candidate_leader', 'cl', 'cl.leader_id = leader.id')
-      .where('cl.candidate_id = :candidateId', { candidateId })
-      .distinct(true);
+      .where('cl.candidate_id = :candidateId', { candidateId });
 
+    // ✅ FIX: Lógica de búsqueda correcta con paréntesis
     if (search && search.trim()) {
-      query
-        .andWhere('LOWER(leader.name) LIKE LOWER(:search)', {
-          search: `%${search}%`,
-        })
-        .orWhere('LOWER(leader.document) LIKE LOWER(:search)', {
-          search: `%${search}%`,
-        })
-        .orWhere('LOWER(leader.municipality) LIKE LOWER(:search)', {
-          search: `%${search}%`,
-        });
+      query.andWhere(
+        `(LOWER(leader.name) LIKE LOWER(:search) OR LOWER(leader.document) LIKE LOWER(:search) OR LOWER(leader.municipality) LIKE LOWER(:search))`,
+        { search: `%${search}%` },
+      );
     }
 
     const [leaders, total] = await query
       .skip(skip)
       .take(limit)
+      .distinct(true)
       .getManyAndCount();
 
     return {
@@ -146,12 +162,16 @@ export class LeaderService {
   }
 
   async findOne(id: number): Promise<Leader | null> {
-    return await this.leaderRepository.findOneBy({ id });
+    return await this.leaderRepository.findOne({
+      where: { id },
+      relations: ['campaign', 'candidates'],
+    });
   }
 
   async findByUserId(userId: number): Promise<Leader | null> {
     return await this.leaderRepository.findOne({
       where: { userId },
+      relations: ['campaign', 'candidates'],
     });
   }
 
@@ -185,7 +205,7 @@ export class LeaderService {
   async getCandidates(leaderId: number): Promise<Candidate[]> {
     const leader = await this.leaderRepository.findOne({
       where: { id: leaderId },
-      relations: ['candidates', 'candidates.corporation'],
+      relations: ['candidates', 'candidates.corporation', 'campaign'],
     });
 
     if (!leader) {
@@ -201,11 +221,11 @@ export class LeaderService {
   ): Promise<Leader> {
     const leader = await this.leaderRepository.findOne({
       where: { id: leaderId },
-      relations: ['candidates'],
+      relations: ['candidates', 'campaign'],
     });
 
     if (!leader) {
-      throw new Error('Leader not found');
+      throw new NotFoundException(`Leader with ID ${leaderId} not found`);
     }
 
     // Obtener los candidatos por sus IDs
@@ -223,11 +243,11 @@ export class LeaderService {
   ): Promise<Leader> {
     const leader = await this.leaderRepository.findOne({
       where: { id: leaderId },
-      relations: ['candidates'],
+      relations: ['candidates', 'campaign'],
     });
 
     if (!leader) {
-      throw new Error('Leader not found');
+      throw new NotFoundException(`Leader with ID ${leaderId} not found`);
     }
 
     // Obtener los candidatos por sus IDs
@@ -245,11 +265,11 @@ export class LeaderService {
   ): Promise<Leader> {
     const leader = await this.leaderRepository.findOne({
       where: { id: leaderId },
-      relations: ['candidates'],
+      relations: ['candidates', 'campaign'],
     });
 
     if (!leader) {
-      throw new Error('Leader not found');
+      throw new NotFoundException(`Leader with ID ${leaderId} not found`);
     }
 
     // Filtrar los candidatos para remover los especificados

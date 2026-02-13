@@ -18,4 +18,3 @@ export class Corporation {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

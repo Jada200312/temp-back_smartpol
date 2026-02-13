@@ -1,11 +1,12 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Candidate } from '../../database/entities/candidate.entity';
 import { Leader } from '../../database/entities/leader.entity';
 import { User } from '../../database/entities/user.entity';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
+import { Campaign } from 'src/database/entities';
 
 @Injectable()
 export class CandidateService {
@@ -16,6 +17,8 @@ export class CandidateService {
     private readonly leaderRepository: Repository<Leader>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Campaign)
+    private readonly campaignRepository: Repository<Campaign>,
   ) {}
 
   async create(createCandidateDto: CreateCandidateDto): Promise<Candidate> {
@@ -41,7 +44,8 @@ export class CandidateService {
     const skip = (page - 1) * limit;
     const query = this.candidateRepository
       .createQueryBuilder('candidate')
-      .leftJoinAndSelect('candidate.corporation', 'corporation');
+      .leftJoinAndSelect('candidate.corporation', 'corporation')
+      .leftJoinAndSelect('candidate.campaign', 'campaign');
 
     if (search && search.trim()) {
       query
@@ -73,14 +77,21 @@ export class CandidateService {
   async findOne(id: number): Promise<Candidate | null> {
     return await this.candidateRepository.findOne({
       where: { id },
-      relations: ['corporation', 'leaders'],
+      relations: ['corporation', 'leaders', 'campaign'],
     });
   }
 
   async findByUserId(userId: number): Promise<Candidate | null> {
     return await this.candidateRepository.findOne({
       where: { userId },
-      relations: ['corporation', 'leaders'],
+      relations: ['corporation', 'leaders', 'campaign'],
+    });
+  }
+
+  async findByCampaignIds(campaignIds: number[]): Promise<Candidate[]> {
+    return await this.candidateRepository.find({
+      where: { campaignId: In(campaignIds) },
+      relations: ['corporation', 'leaders', 'campaign'],
     });
   }
 
@@ -186,6 +197,7 @@ export class CandidateService {
         { leaderId },
       )
       .innerJoinAndSelect('candidate.corporation', 'corporation')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
       .where('candidate.corporation_id = :corporationId', { corporationId })
       .setParameter('leaderId', leaderId)
       .setParameter('corporationId', corporationId)

@@ -7,11 +7,18 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  Index,
 } from 'typeorm';
 import { Role } from './role.entity';
 import { UserPermission } from './user-permission.entity';
+import { Organization } from './organizations.entity';
+import { CampaignUser } from './campaign-user.entity';
 
 @Entity('users')
+@Index(['email'])
+@Index(['roleId'])
+@Index(['organizationId'])
+@Index(['createdAt'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;
@@ -31,6 +38,17 @@ export class User {
 
   @OneToMany(() => UserPermission, (up) => up.user)
   permissions: UserPermission[];
+
+  // Un usuario puede pertenecer a una organización
+  @ManyToOne(() => Organization, (organization) => organization.users, { nullable: true })
+  @JoinColumn({ name: 'organizationId' })
+  organization: Organization;
+
+  @Column({ nullable: true })
+  organizationId: number;
+  // Un usuario puede estar en muchas campañas a través de CampaignUser
+  @OneToMany(() => CampaignUser, (campaignUser) => campaignUser.user)
+  campaignUsers: CampaignUser[];
 
   @CreateDateColumn()
   createdAt: Date;

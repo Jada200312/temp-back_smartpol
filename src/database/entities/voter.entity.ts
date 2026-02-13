@@ -8,13 +8,22 @@ import {
   JoinTable,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Candidate } from './candidate.entity';
+import { Leader } from './leader.entity';
 import { Department } from './department.entity';
 import { Municipality } from './municipality.entity';
 import { VotingBooth } from './voting-booth.entity';
 
 @Entity('voters')
+@Index(['identification'])
+@Index(['departmentId'])
+@Index(['municipalityId'])
+@Index(['votingBoothId'])
+@Index(['firstName', 'lastName'])
+@Index(['email'])
+@Index(['phone'])
 export class Voter {
   @PrimaryGeneratedColumn()
   id: number;
@@ -89,6 +98,8 @@ export class Voter {
 
   @CreateDateColumn()
   createdAt: Date;
+
+  leaders?: Leader[] | null;
 
   @UpdateDateColumn()
   updatedAt: Date;

@@ -41,4 +41,13 @@ export class CreateLeaderDto {
   @IsNumber()
   @IsOptional()
   userId?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Campaign ID to assign the leader to (optional)',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  campaignId?: number;
 }

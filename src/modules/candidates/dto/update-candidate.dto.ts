@@ -5,6 +5,7 @@ export class UpdateCandidateDto {
   @ApiProperty({
     example: 'Juan Duarte',
     description: 'Candidate name (optional)',
+
   })
   @IsString()
   @IsOptional()
@@ -41,4 +42,12 @@ export class UpdateCandidateDto {
   @IsNumber()
   @IsOptional()
   userId?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Campaign ID that the candidate belongs to (optional)',
+  })
+  @IsNumber()
+  @IsOptional()
+  campaignId?: number;
 }

@@ -43,6 +43,7 @@ export class CandidateController {
           party: 'Partido Colombiano',
           number: 1,
           corporation_id: 1,
+          campaignId: 1,
         },
         description: 'Example of creating a candidate',
       },
@@ -58,6 +59,13 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        campaignId: 1,
+        campaign: {
+          id: 1,
+          name: 'Campaign A',
+          startDate: '2024-01-01',
+          endDate: '2024-12-31',
+        },
         createdAt: '2024-01-27T10:30:00Z',
         updatedAt: '2024-01-27T10:30:00Z',
       },
@@ -99,6 +107,30 @@ export class CandidateController {
   @ApiResponse({
     status: 200,
     description: 'List of candidates retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            id: 1,
+            name: 'Juan Duarte',
+            party: 'Partido Colombiano',
+            number: 1,
+            corporation_id: 1,
+            campaignId: 1,
+            campaign: {
+              id: 1,
+              name: 'Campaign A',
+            },
+            createdAt: '2024-01-27T10:30:00Z',
+            updatedAt: '2024-01-27T10:30:00Z',
+          }
+        ],
+        total: 1,
+        page: 1,
+        limit: 10,
+        pages: 1,
+      },
+    },
   })
   async findAll(
     @Query('page') page: string = '1',
@@ -112,6 +144,74 @@ export class CandidateController {
       limitNum,
       search,
     );
+  }
+
+  @Get('by-campaign/:campaignId')
+  @Permission('candidates:read')
+  @ApiParam({
+    name: 'campaignId',
+    type: 'number',
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiOperation({
+    summary: 'Get candidates by campaign ID',
+    description: 'Returns all candidates associated with a specific campaign',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Candidates found for the campaign',
+    schema: {
+      example: [
+        {
+          id: 1,
+          name: 'Juan Duarte',
+          party: 'Partido Colombiano',
+          number: 1,
+          corporation_id: 1,
+          campaignId: 1,
+          campaign: {
+            id: 1,
+            name: 'Campaign A',
+            startDate: '2024-01-01',
+            endDate: '2024-12-31',
+            status: true,
+          },
+          createdAt: '2024-01-27T10:30:00Z',
+          updatedAt: '2024-01-27T10:30:00Z',
+        },
+        {
+          id: 2,
+          name: 'María García',
+          party: 'Partido Liberal',
+          number: 2,
+          corporation_id: 1,
+          campaignId: 1,
+          campaign: {
+            id: 1,
+            name: 'Campaña 2024',
+            startDate: '2024-01-15',
+            endDate: '2024-12-31',
+            status: true,
+          },
+          createdAt: '2026-02-06T02:10:14Z',
+          updatedAt: '2026-02-06T02:10:14Z',
+        },
+      ],
+    },
+  })
+
+  @ApiResponse({
+    status: 200,
+    description: 'No candidates found for the campaign',
+    schema: {
+      example: [],
+    },
+  })
+  async findByCampaignId(
+    @Param('campaignId') campaignId: string,
+  ): Promise<Candidate[]> {
+    return await this.candidateService.findByCampaignIds([+campaignId]);
   }
 
   @Get(':id')
@@ -136,11 +236,26 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        userId: null,
+        campaignId: 1,
+        Campaign:{
+          id: 1,
+          name: 'Campaign A',
+          startDate: '2024-01-01',
+          endDate: '2024-12-31',
+          status: true,
+        },
+        leaders: [],
         createdAt: '2024-01-27T10:30:00Z',
         updatedAt: '2024-01-27T10:30:00Z',
       },
     },
   })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate not found',
+  })
+
   async findOne(@Param('id') id: string): Promise<Candidate | null> {
     return await this.candidateService.findOne(+id);
   }
@@ -160,6 +275,24 @@ export class CandidateController {
   @ApiResponse({
     status: 200,
     description: 'Candidate found',
+    schema: {
+      example: {
+        id: 1,
+        name: 'Juan Duarte',
+        party: 'Partido Colombiano',
+        number: 1,
+        corporation_id: 1,
+        userId: 1,
+        campaignId: 1,
+        campaign: {
+          id: 1,
+          name: 'Campaign A',
+          startDate: '2024-01-01',
+        },
+        createdAt: '2024-01-27T10:30:00Z',
+        updatedAt: '2024-01-27T10:30:00Z',
+      },
+    },
   })
   @ApiResponse({
     status: 404,
@@ -181,7 +314,7 @@ export class CandidateController {
   })
   @ApiOperation({
     summary: 'Update a candidate',
-    description: 'Update candidate information',
+    description: 'Update candidate information including campaign assignment',
   })
   @ApiBody({
     type: UpdateCandidateDto,
@@ -189,9 +322,29 @@ export class CandidateController {
     examples: {
       example1: {
         value: {
-          party: 'Nuevo Partido',
+          name: 'Juan Duarte Updated',
         },
-        description: 'Example of updating candidate party',
+        description: 'Update only candidate name',
+      },
+      example2: {
+        value: {
+          campaignId: 2,
+        },
+        description: 'Change campaign assignment',
+      },
+      example3: {
+        value: {
+          CampaignId: null,
+        },
+        description: 'Update multiple fields including campaign',
+      },
+      example4: {
+        value: {
+          name: 'Juan Duarte',
+          party: 'Partido Conservador',
+          campaignId: 1,
+        },
+        description: 'Update multiple fields including campaign',
       },
     },
   })
@@ -201,14 +354,26 @@ export class CandidateController {
     schema: {
       example: {
         id: 1,
-        name: 'Juan Duarte',
-        party: 'Nuevo Partido',
+        name: 'Juan Duarte Updated',
+        party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
-        createdAt: '2024-01-27T10:30:00Z',
-        updatedAt: '2024-01-27T10:30:01Z',
+        userId: null,
+        campaignId: 2,
+        Campaign: {
+          id: 2,
+          name: 'Campaign B',
+          startDate: '2026-01-01',
+          endDate: '2026-12-31',
+        },
+        createdAt: '2026-02-06T02:10:14Z',
+        updatedAt: '2026-02-06T02:15:30Z',
       },
     },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate not found',
   })
   async update(
     @Param('id') id: string,
@@ -232,6 +397,10 @@ export class CandidateController {
   @ApiResponse({
     status: 200,
     description: 'Candidate deleted successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate not found',
   })
   async remove(@Param('id') id: string): Promise<void> {
     return await this.candidateService.remove(+id);
@@ -265,6 +434,7 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        campaignId: 1,
         leaders: [
           {
             id: 1,
@@ -278,6 +448,10 @@ export class CandidateController {
         updatedAt: '2024-01-27T10:30:00Z',
       },
     },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate or Leader not found',
   })
   async assignLeaderToCandidate(
     @Param('candidateId') candidateId: string,
@@ -310,6 +484,10 @@ export class CandidateController {
   @ApiResponse({
     status: 200,
     description: 'Leader removed successfully from candidate',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate or Leader not found',
   })
   async removeLeaderFromCandidate(
     @Param('candidateId') candidateId: string,
@@ -348,6 +526,10 @@ export class CandidateController {
       ],
     },
   })
+  @ApiResponse({
+    status: 404,
+    description: 'Candidate not found',
+  })
   async getLeadersByCandidate(@Param('candidateId') candidateId: string) {
     return await this.candidateService.getLeadersByCandidate(+candidateId);
   }
@@ -382,6 +564,11 @@ export class CandidateController {
           party: 'Partido Colombiano',
           number: 1,
           corporation_id: 1,
+          campaignId: 1,
+          campaign: {
+            id: 1,
+            name: 'Campaign A',
+          },
           corporation: {
             id: 1,
             name: 'Corporation A',

@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   Request,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -33,7 +34,8 @@ export class LeaderController {
   @Permission('leaders:create')
   @ApiOperation({
     summary: 'Create a new leader',
-    description: 'Register a new political leader in the system',
+    description:
+      'Register a new political leader in the system with optional campaign assignment',
   })
   @ApiBody({
     type: CreateLeaderDto,
@@ -45,8 +47,18 @@ export class LeaderController {
           document: '12345678',
           municipality: 'Bogotá',
           phone: '+57 312 123 4567',
+          campaignIds: 1,
         },
-        description: 'Example of creating a leader',
+        description: 'Example of creating a leader with campaign assignment',
+      },
+      example2: {
+        value: {
+          name: 'María Rodríguez',
+          document: '87654321',
+          municipality: 'Medellín',
+          phone: '+57 312 987 6543',
+        },
+        description: 'Example of creating a leader without campaign assignment',
       },
     },
   })
@@ -60,6 +72,15 @@ export class LeaderController {
         document: '12345678',
         municipality: 'Bogotá',
         phone: '+57 312 123 4567',
+        userId: null,
+        campaignIds: 1,
+        Campaign: {
+          id: 1,
+          name: 'Campaña de Prueba',
+          startDate: '2024-01-01T00:00:00Z',
+          endDate: '2024-12-31T23:59:59Z',
+          status: 'active',
+        },
         createdAt: '2024-01-27T10:30:00Z',
         updatedAt: '2024-01-27T10:30:00Z',
       },
@@ -102,6 +123,32 @@ export class LeaderController {
   @ApiResponse({
     status: 200,
     description: 'List of leaders retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            id: 1,
+            name: 'Juan López',
+            document: '12345678',
+            municipality: 'Bogotá',
+            phone: '+57 312 123 4567',
+            campaignId: 1,
+            campaign: {
+              id: 1,
+              name: 'Campaña de Prueba',
+              startDate: '2024-01-01T00:00:00Z',
+              endDate: '2024-12-31T23:59:59Z',
+            },
+            createdAt: '2024-01-27T10:30:00Z',
+            updatedAt: '2024-01-27T10:30:00Z',
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 10,
+        pages: 1,
+      },
+    },
   })
   async findAll(
     @Query('page') page: string = '1',
@@ -117,6 +164,62 @@ export class LeaderController {
     );
   }
 
+  // ✅ RUTA 1: Por campaña (para admin/coordinador) - SIN paginación
+  @Get('by-campaign/:campaignId')
+  @Permission('leaders:read')
+  @ApiParam({
+    name: 'campaignId',
+    type: 'number',
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiOperation({
+    summary: 'Get leaders by campaign ID',
+    description: 'Returns all leaders working for a specific campaign',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Leaders found for the campaign',
+    schema: {
+      example: [
+        {
+          id: 1,
+          name: 'Juan López',
+          document: '12345678',
+          municipality: 'Bogotá',
+          phone: '+57 312 123 4567',
+          campaignId: 1,
+          campaign: {
+            id: 1,
+            name: 'Campaña de Prueba',
+            startDate: '2024-01-01T00:00:00Z',
+            endDate: '2024-12-31T23:59:59Z',
+            status: 'active',
+          },
+          createdAt: '2024-01-27T10:30:00Z',
+          updatedAt: '2024-01-27T10:30:00Z',
+        },
+      ],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'No leaders found for this campaign',
+    schema: {
+      example: [],
+    },
+  })
+  async findByCampaignId(
+    @Param('campaignId') campaignId: string,
+  ): Promise<Leader[]> {
+    const id = parseInt(campaignId, 10);
+    if (isNaN(id) || id <= 0) {
+      throw new BadRequestException('campaignId debe ser un número válido');
+    }
+    return await this.leaderService.findByCampaignId(id);
+  }
+
+  // ✅ RUTA 2: Por candidato (para candidatos) - CON paginación
   @Get('by-candidate/:candidateId')
   @Permission('leaders:read')
   @ApiParam({
@@ -153,6 +256,27 @@ export class LeaderController {
   @ApiResponse({
     status: 200,
     description: 'List of leaders for the candidate retrieved successfully',
+    schema: {
+      example: {
+        data: [
+          {
+            id: 1,
+            name: 'Juan López',
+            document: '12345678',
+            municipality: 'Bogotá',
+            campaignId: 1,
+            campaign: {
+              id: 1,
+              name: 'Campaña de Prueba',
+            },
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 10,
+        pages: 1,
+      },
+    },
   })
   async findByCandidate(
     @Param('candidateId') candidateId: string,
@@ -160,10 +284,18 @@ export class LeaderController {
     @Query('limit') limit: string = '10',
     @Query('search') search?: string,
   ) {
+    const id = parseInt(candidateId, 10);
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+
+    if (isNaN(id) || id <= 0) {
+      throw new BadRequestException('candidateId debe ser un número válido');
+    }
+
+    console.log('📞 Buscando líderes para candidato:', { id, pageNum, limitNum });
+
     return await this.leaderService.findByCandidateWithPagination(
-      +candidateId,
+      id,
       pageNum,
       limitNum,
       search,
@@ -184,6 +316,23 @@ export class LeaderController {
   @ApiResponse({
     status: 200,
     description: 'Leader found successfully',
+    schema: {
+      example: {
+        id: 1,
+        name: 'Juan López',
+        document: '12345678',
+        municipality: 'Bogotá',
+        phone: '+57 312 123 4567',
+        userId: 5,
+        campaignId: 1,
+        Campaign: {
+          id: 1,
+          name: 'Campaña de Prueba',
+        },
+        createdAt: '2024-01-27T10:30:00Z',
+        updatedAt: '2024-01-27T10:30:00Z',
+      },
+    },
   })
   @ApiResponse({
     status: 404,
@@ -203,7 +352,8 @@ export class LeaderController {
   })
   @ApiOperation({
     summary: 'Get leader by ID',
-    description: 'Returns a specific leader',
+    description:
+      'Returns a specific leader with all its relationships including assigned campaign and candidates',
   })
   @ApiResponse({
     status: 200,
@@ -215,10 +365,23 @@ export class LeaderController {
         document: '12345678',
         municipality: 'Bogotá',
         phone: '+57 312 123 4567',
+        userId: null,
+        campaignId: 1,
+        Campaign: {
+          id: 1,
+          name: 'Campaña de Prueba',
+          startDate: '2024-01-01T00:00:00Z',
+          endDate: '2024-12-31T23:59:59Z',
+          status: 'active',
+        },
         createdAt: '2024-01-27T10:30:00Z',
         updatedAt: '2024-01-27T10:30:00Z',
       },
     },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Leader not found',
   })
   async findOne(@Param('id') id: string): Promise<Leader | null> {
     return await this.leaderService.findOne(+id);
@@ -246,6 +409,20 @@ export class LeaderController {
         },
         description: 'Example of updating leader phone',
       },
+      example2: {
+        value: {
+          campaignId: 2,
+        },
+        description: 'Example of updating leader campaign assignment',
+      },
+      example3: {
+        value: {
+          name: 'Juan López Updated',
+          municipality: 'Cali',
+          campaignId: 1,
+        },
+        description: 'Update multiple fields including campaign',
+      },
     },
   })
   @ApiResponse({
@@ -258,10 +435,19 @@ export class LeaderController {
         document: '12345678',
         municipality: 'Bogotá',
         phone: '+57 312 999 8888',
+        campaignId: 1,
+        campaign: {
+          id: 1,
+          name: 'Campaña de Prueba',
+        },
         createdAt: '2024-01-27T10:30:00Z',
         updatedAt: '2024-01-27T10:30:01Z',
       },
     },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Leader not found',
   })
   async update(
     @Param('id') id: string,
@@ -280,11 +466,16 @@ export class LeaderController {
   })
   @ApiOperation({
     summary: 'Delete a leader',
-    description: 'Delete a leader from the system',
+    description:
+      'Delete a leader from the system. Also deletes associated user if exists',
   })
   @ApiResponse({
     status: 200,
     description: 'Leader deleted successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Leader not found',
   })
   async remove(@Param('id') id: string): Promise<void> {
     return await this.leaderService.remove(+id);
@@ -313,6 +504,7 @@ export class LeaderController {
           party: 'Partido Colombiano',
           number: 1,
           corporation_id: 1,
+          campaignId: 1,
           createdAt: '2024-01-27T10:30:00Z',
           updatedAt: '2024-01-27T10:30:00Z',
         },
@@ -357,6 +549,10 @@ export class LeaderController {
   @ApiResponse({
     status: 200,
     description: 'Candidates assigned successfully',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Leader not found',
   })
   async assignCandidates(
     @Param('id') id: string,

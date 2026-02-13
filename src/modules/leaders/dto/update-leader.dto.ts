@@ -41,4 +41,13 @@ export class UpdateLeaderDto {
   @IsNumber()
   @IsOptional()
   userId?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Campaign ID that the leader works for (optional). Change the campaign assignment for this leader.',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  campaignId?: number;
 }
