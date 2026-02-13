@@ -2,11 +2,14 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UserModule } from '../users/user.module';
 import { PermissionsModule } from '../../permissions/permissions.module';
+import { Organization } from 'src/database/entities/organizations.entity';
+import { User } from 'src/database/entities/user.entity';
 
 @Module({
   imports: [
@@ -25,6 +28,7 @@ import { PermissionsModule } from '../../permissions/permissions.module';
         };
       },
     }),
+    TypeOrmModule.forFeature([Organization, User]),
     UserModule,
     PermissionsModule,
   ],

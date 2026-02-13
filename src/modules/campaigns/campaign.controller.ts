@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,10 +23,14 @@ import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
 import { Campaign } from '../../database/entities/campaigns.entity';
 import { Permission } from '../../permissions/permission.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User } from '../../database/entities/user.entity';
 
 @ApiTags('Campaigns')
 @Controller('campaigns')
 @ApiBearerAuth('access-token')
+@UseGuards(JwtAuthGuard)
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
@@ -34,7 +39,7 @@ export class CampaignsController {
   @ApiOperation({
     summary: 'Create a new campaign',
     description:
-      'Register a new political campaign with organization, dates, and optional user assignments',
+      'Register a new political campaign with organization, dates, and optional user assignments. Organization admins will have their organization automatically assigned.',
   })
   @ApiBody({
     type: CreateCampaignDto,
@@ -99,8 +104,12 @@ export class CampaignsController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid data' })
-  create(@Body() createCampaignDto: CreateCampaignDto) {
-    return this.campaignsService.create(createCampaignDto);
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async create(
+    @Body() createCampaignDto: CreateCampaignDto,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.campaignsService.create(createCampaignDto, currentUser);
   }
 
   @Get()
@@ -108,7 +117,7 @@ export class CampaignsController {
   @ApiOperation({
     summary: 'Get all campaigns',
     description:
-      'Returns a list of all campaigns with their associated organizations, candidates, leaders, and users',
+      'Returns a list of all campaigns. Organization admins will only see campaigns from their organization.',
   })
   @ApiQuery({
     name: 'page',
@@ -173,11 +182,12 @@ export class CampaignsController {
       ],
     },
   })
-  findAll(
+  async findAll(
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
+    @CurrentUser() currentUser: User,
   ) {
-    return this.campaignsService.findAll();
+    return this.campaignsService.findAll(currentUser);
   }
 
   @Get('organization/:organizationId')
@@ -214,8 +224,12 @@ export class CampaignsController {
       ],
     },
   })
-  findByOrganization(@Param('organizationId') organizationId: string) {
-    return this.campaignsService.findByOrganization(+organizationId);
+  @ApiResponse({ status: 403, description: 'Not authorized to view this organization campaigns' })
+  async findByOrganization(
+    @Param('organizationId') organizationId: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.campaignsService.findByOrganization(+organizationId, currentUser);
   }
 
   @Get(':id')
@@ -297,8 +311,12 @@ export class CampaignsController {
     },
   })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
-  findOne(@Param('id') id: string) {
-    return this.campaignsService.findOne(+id);
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.campaignsService.findOne(+id, currentUser);
   }
 
   @Patch(':id')
@@ -328,7 +346,7 @@ export class CampaignsController {
         value: {
           name: 'Campaña Electoral 2024 - Actualizada',
           description: 'Nueva descripción',
-          ended: '2024-11-30',
+          endDate: '2024-11-30',
           userIds: [1, 2, 3, 4],
         },
         description: 'Update campaign with new user assignments',
@@ -367,11 +385,13 @@ export class CampaignsController {
     },
   })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
-  update(
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async update(
     @Param('id') id: string,
     @Body() updateCampaignDto: UpdateCampaignDto,
+    @CurrentUser() currentUser: User,
   ) {
-    return this.campaignsService.update(+id, updateCampaignDto);
+    return this.campaignsService.update(+id, updateCampaignDto, currentUser);
   }
 
   @Delete(':id')
@@ -388,8 +408,12 @@ export class CampaignsController {
   })
   @ApiResponse({ status: 200, description: 'Campaign deleted successfully' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
-  remove(@Param('id') id: string) {
-    return this.campaignsService.remove(+id);
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.campaignsService.remove(+id, currentUser);
   }
 
   @Post(':campaignId/users/:userId')
@@ -426,11 +450,18 @@ export class CampaignsController {
       },
     },
   })
-  assignUserToCampaign(
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  @ApiResponse({ status: 404, description: 'Campaign or user not found' })
+  async assignUserToCampaign(
     @Param('campaignId') campaignId: string,
     @Param('userId') userId: string,
+    @CurrentUser() currentUser: User,
   ) {
-    return this.campaignsService.assignUsersTooCampaign(+campaignId, [+userId]);
+    return this.campaignsService.assignUsersTooCampaign(
+      +campaignId,
+      [+userId],
+      currentUser,
+    );
   }
 
   @Delete(':campaignId/users/:userId')
@@ -456,11 +487,17 @@ export class CampaignsController {
     description: 'User removed from campaign successfully',
   })
   @ApiResponse({ status: 404, description: 'Campaign or user not found' })
-  removeUserFromCampaign(
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  async removeUserFromCampaign(
     @Param('campaignId') campaignId: string,
     @Param('userId') userId: string,
+    @CurrentUser() currentUser: User,
   ) {
-    return this.campaignsService.removeUserFromCampaign(+campaignId, +userId);
+    return this.campaignsService.removeUserFromCampaign(
+      +campaignId,
+      +userId,
+      currentUser,
+    );
   }
 
   @Get(':id/candidates')
@@ -490,8 +527,13 @@ export class CampaignsController {
       ],
     },
   })
-  async getCandidates(@Param('id') id: string) {
-    const campaign = await this.campaignsService.findOne(+id);
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getCandidates(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    const campaign = await this.campaignsService.findOne(+id, currentUser);
     return campaign.candidates || [];
   }
 
@@ -522,8 +564,13 @@ export class CampaignsController {
       ],
     },
   })
-  async getLeaders(@Param('id') id: string) {
-    const campaign = await this.campaignsService.findOne(+id);
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getLeaders(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    const campaign = await this.campaignsService.findOne(+id, currentUser);
     return campaign.leaders || [];
   }
 }

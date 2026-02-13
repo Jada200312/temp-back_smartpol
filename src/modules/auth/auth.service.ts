@@ -10,6 +10,10 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import * as bcrypt from 'bcrypt';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Organization } from 'src/database/entities/organizations.entity';
+import { User } from 'src/database/entities/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -17,6 +21,10 @@ export class AuthService {
     private jwtService: JwtService,
     private userService: UserService,
     private permissionsService: PermissionsService,
+    @InjectRepository(Organization)
+    private organizationRepository: Repository<Organization>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -43,6 +51,8 @@ export class AuthService {
       id: usuario.id,
       email: usuario.email,
       roleId: usuario.role?.id ?? null,
+      organizationId: null as number | null,
+      organizationName: null as string | null,
       access_token: accessToken,
       refresh_token: refreshToken,
       message: 'User registered successfully',
@@ -50,8 +60,12 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto) {
-    // Buscar usuario
-    const usuario = await this.userService.findByEmail(loginDto.email);
+    // Buscar usuario con relaciones
+    const usuario = await this.userRepository.findOne({
+      where: { email: loginDto.email },
+      relations: ['role', 'organization'],
+    });
+
     if (!usuario) {
       throw new UnauthorizedException('Invalid credentials');
     }
@@ -65,6 +79,15 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    let organizationId: number | null = null;
+    let organizationName: string | null = null;
+
+    // Si el usuario tiene organización asignada
+    if (usuario.organizationId) {
+      organizationId = usuario.organizationId;
+      organizationName = usuario.organization?.name ?? null;
+    }
+
     // Generar JWT
     const accessToken = await this.generateToken(usuario);
     const refreshToken = await this.generateRefreshToken(usuario);
@@ -73,6 +96,8 @@ export class AuthService {
       id: usuario.id,
       email: usuario.email,
       roleId: usuario.role?.id ?? null,
+      organizationId,
+      organizationName,
       access_token: accessToken,
       refresh_token: refreshToken,
       message: 'Login successful',
@@ -116,10 +141,23 @@ export class AuthService {
       // Verify the refresh token
       const payload = this.jwtService.verify(refreshTokenString);
 
-      // Get the user
-      const user = await this.userService.findOne(payload.sub);
+      // Get the user with relations
+      const user = await this.userRepository.findOne({
+        where: { id: payload.sub },
+        relations: ['role', 'organization'],
+      });
+
       if (!user) {
         throw new UnauthorizedException('User not found');
+      }
+
+      let organizationId: number | null = null;
+      let organizationName: string | null = null;
+
+      // Si el usuario tiene organización asignada
+      if (user.organizationId) {
+        organizationId = user.organizationId;
+        organizationName = user.organization?.name ?? null;
       }
 
       // Generate new access token
@@ -132,6 +170,8 @@ export class AuthService {
         id: user.id,
         email: user.email,
         roleId: user.role?.id ?? null,
+        organizationId,
+        organizationName,
         access_token: newAccessToken,
         refresh_token: newRefreshToken,
         message: 'Token refreshed successfully',

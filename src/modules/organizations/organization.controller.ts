@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { OrganizationsService } from './organization.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { CreateOrganizationWithAdminDto } from './dto/create-organization-with-admin.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Organization } from '../../database/entities/organizations.entity';
 import { Permission } from '../../permissions/permission.decorator';
@@ -33,6 +34,25 @@ export class OrganizationsController {
   @ApiResponse({ status: 403, description: 'No tiene permiso' })
   create(@Body() createOrganizationDto: CreateOrganizationDto) {
     return this.organizationsService.create(createOrganizationDto);
+  }
+
+  @Post('with-admin')
+  @Permission('organizations:create')
+  @ApiOperation({ summary: 'Crear organización con administrador' })
+  @ApiResponse({
+    status: 201,
+    description: 'Organización y administrador creados exitosamente',
+    type: Organization,
+  })
+  @ApiResponse({ status: 400, description: 'Datos inválidos' })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({ status: 403, description: 'No tiene permiso' })
+  createWithAdmin(
+    @Body() createOrganizationWithAdminDto: CreateOrganizationWithAdminDto,
+  ) {
+    return this.organizationsService.createOrganizationWithAdmin(
+      createOrganizationWithAdminDto,
+    );
   }
 
   @Get()

@@ -45,12 +45,13 @@ export class CreateCampaignDto {
   status?: boolean;
 
   @ApiProperty({
-    description: 'ID de la organización a la que pertenece',
+    description: 'ID de la organización a la que pertenece. Para admins de organización, se asigna automáticamente (opcional).',
     example: 1,
+    required: false,
   })
   @IsNumber()
-  @IsNotEmpty()
-  organizationId: number;
+  @IsOptional()
+  organizationId?: number;
 
   @ApiProperty({
     description: 'IDs de usuarios asignados a la campaña',
