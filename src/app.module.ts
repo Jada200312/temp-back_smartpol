@@ -63,7 +63,22 @@ import {
         UserPermission,
       ],
       synchronize: false,
-      logging: false,
+      logging:
+        process.env.DB_LOGGING === 'true' ? ['query', 'error'] : ['error'],
+      // Connection pool configuration for production
+      extra: {
+        max: parseInt(process.env.DB_POOL_SIZE || '20', 10),
+        min: parseInt(process.env.DB_POOL_MIN || '5', 10),
+        idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
+        connectionTimeoutMillis: parseInt(
+          process.env.DB_CONNECTION_TIMEOUT || '5000',
+          10,
+        ),
+        statement_timeout: parseInt(
+          process.env.DB_STATEMENT_TIMEOUT || '30000',
+          10,
+        ),
+      },
     }),
     TypeOrmModule.forFeature([
       User,
