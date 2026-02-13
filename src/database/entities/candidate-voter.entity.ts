@@ -6,12 +6,16 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 import { Voter } from './voter.entity';
 import { Candidate } from './candidate.entity';
 import { Leader } from './leader.entity';
 
 @Entity('candidate_voter')
+@Index(['voterId'])
+@Index(['candidateId'])
+@Index(['leaderId'])
 export class CandidateVoter {
   @PrimaryGeneratedColumn()
   id: number;
