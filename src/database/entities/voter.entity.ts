@@ -11,6 +11,7 @@ import {
   Index,
 } from 'typeorm';
 import { Candidate } from './candidate.entity';
+import { Leader } from './leader.entity';
 import { Department } from './department.entity';
 import { Municipality } from './municipality.entity';
 import { VotingBooth } from './voting-booth.entity';
@@ -94,6 +95,9 @@ export class Voter {
     inverseJoinColumn: { name: 'candidateId', referencedColumnName: 'id' },
   })
   candidates: Candidate[];
+
+  // Virtual property - populated dynamically from CandidateVoter relations
+  leaders?: Leader[] | null;
 
   @CreateDateColumn()
   createdAt: Date;
