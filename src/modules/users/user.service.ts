@@ -17,21 +17,32 @@ export class UserService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const { campaignIds, ...userData } = createUserDto;
+    const { campaignIds, organizationId, ...userData } = createUserDto;
     
     // Hash la contraseña antes de guardar
     const hashedPassword = await bcrypt.hash(userData.password, 10);
-    const user = this.userRepository.create({
+    
+    const userCreateData: any = {
       ...userData,
       password: hashedPassword,
-    });
-    const savedUser = await this.userRepository.save(user);
+    };
 
-    if (campaignIds && campaignIds.length > 0) {
-      await this.assignUserToCampaigns(savedUser.id, campaignIds);
+    // Solo agregar organizationId si existe
+    if (organizationId) {
+      userCreateData.organizationId = organizationId;
     }
 
-    return (await this.findOne(savedUser.id))!;
+    const user = this.userRepository.create(userCreateData);
+    const savedUser = await this.userRepository.save(user);
+
+    // Asegurar que savedUser es un objeto, no un array
+    const userIdToUse = (savedUser as any)?.id;
+
+    if (campaignIds && campaignIds.length > 0 && userIdToUse) {
+      await this.assignUserToCampaigns(userIdToUse, campaignIds);
+    }
+
+    return (await this.findOne(userIdToUse))!;
   }
 
   async findAll(): Promise<User[]> {

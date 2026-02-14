@@ -27,13 +27,14 @@ export class CandidateService {
   }
 
   async findAll(): Promise<Candidate[]> {
-    return await this.candidateRepository.find({ relations: ['corporation'] });
+    return await this.candidateRepository.find({ relations: ['corporation', 'organization'] });
   }
 
   async findAllWithPagination(
     page: number = 1,
     limit: number = 10,
     search?: string,
+    organizationId?: number,
   ): Promise<{
     data: Candidate[];
     total: number;
@@ -45,19 +46,32 @@ export class CandidateService {
     const query = this.candidateRepository
       .createQueryBuilder('candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
+      .leftJoinAndSelect('candidate.organization', 'organization')
       .leftJoinAndSelect('candidate.campaign', 'campaign');
 
+    // Filtrar por organizationId si se proporciona
+    if (organizationId) {
+      query.where('candidate.organizationId = :organizationId', { organizationId });
+    }
+
     if (search && search.trim()) {
-      query
-        .where('LOWER(candidate.name) LIKE LOWER(:search)', {
+      const searchCondition = `(
+        LOWER(candidate.name) LIKE LOWER(:search)
+        OR LOWER(candidate.party) LIKE LOWER(:search)
+        OR CAST(candidate.number AS CHAR) LIKE :searchNumber
+      )`;
+      
+      if (organizationId) {
+        query.andWhere(searchCondition, {
           search: `%${search}%`,
-        })
-        .orWhere('LOWER(candidate.party) LIKE LOWER(:search)', {
-          search: `%${search}%`,
-        })
-        .orWhere('CAST(candidate.number AS CHAR) LIKE :searchNumber', {
           searchNumber: `%${search}%`,
         });
+      } else {
+        query.where(searchCondition, {
+          search: `%${search}%`,
+          searchNumber: `%${search}%`,
+        });
+      }
     }
 
     const [candidates, total] = await query
@@ -77,21 +91,21 @@ export class CandidateService {
   async findOne(id: number): Promise<Candidate | null> {
     return await this.candidateRepository.findOne({
       where: { id },
-      relations: ['corporation', 'leaders', 'campaign'],
+      relations: ['corporation', 'organization', 'leaders', 'campaign'],
     });
   }
 
   async findByUserId(userId: number): Promise<Candidate | null> {
     return await this.candidateRepository.findOne({
       where: { userId },
-      relations: ['corporation', 'leaders', 'campaign'],
+      relations: ['corporation', 'organization', 'leaders', 'campaign'],
     });
   }
 
   async findByCampaignIds(campaignIds: number[]): Promise<Candidate[]> {
     return await this.candidateRepository.find({
       where: { campaignId: In(campaignIds) },
-      relations: ['corporation', 'leaders', 'campaign'],
+      relations: ['corporation', 'organization', 'leaders', 'campaign'],
     });
   }
 
@@ -104,20 +118,16 @@ export class CandidateService {
   }
 
   async remove(id: number): Promise<void> {
-    // Cargar el candidato con su usuario asociado
     const candidate = await this.candidateRepository.findOne({
       where: { id },
       relations: ['leaders', 'user'],
     });
 
     if (candidate) {
-      // Si el candidato tiene un usuario asociado, eliminarlo también
       if (candidate.userId) {
         await this.userRepository.delete(candidate.userId);
       }
 
-      // TypeORM eliminará automáticamente las relaciones en candidate_leader
-      // porque tenemos cascade: true y onDelete: 'CASCADE' configurados
       await this.candidateRepository.remove(candidate);
     }
   }
@@ -143,7 +153,6 @@ export class CandidateService {
       throw new NotFoundException(`Leader with ID ${leaderId} not found`);
     }
 
-    // Avoid duplicates
     if (!candidate.leaders.some((l) => l.id === leaderId)) {
       candidate.leaders.push(leader);
       await this.candidateRepository.save(candidate);
@@ -197,6 +206,7 @@ export class CandidateService {
         { leaderId },
       )
       .innerJoinAndSelect('candidate.corporation', 'corporation')
+      .leftJoinAndSelect('candidate.organization', 'organization')
       .leftJoinAndSelect('candidate.campaign', 'campaign')
       .where('candidate.corporation_id = :corporationId', { corporationId })
       .setParameter('leaderId', leaderId)

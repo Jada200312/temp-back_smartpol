@@ -43,6 +43,7 @@ export class CandidateController {
           party: 'Partido Colombiano',
           number: 1,
           corporation_id: 1,
+          organizationId: 1,
           campaignId: 1,
         },
         description: 'Example of creating a candidate',
@@ -59,6 +60,7 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        organizationId: 1,
         campaignId: 1,
         campaign: {
           id: 1,
@@ -82,7 +84,7 @@ export class CandidateController {
   @ApiOperation({
     summary: 'Get all candidates',
     description:
-      'Returns the complete list of registered candidates with pagination and search support',
+      'Returns the complete list of registered candidates with pagination and search support. Can be filtered by organization.',
   })
   @ApiQuery({
     name: 'page',
@@ -104,6 +106,13 @@ export class CandidateController {
     required: false,
     description: 'Search by name, party or number (case-insensitive)',
   })
+  @ApiQuery({
+    name: 'organizationId',
+    type: 'number',
+    required: false,
+    description: 'Filter candidates by organization ID',
+    example: 1,
+  })
   @ApiResponse({
     status: 200,
     description: 'List of candidates retrieved successfully',
@@ -116,6 +125,7 @@ export class CandidateController {
             party: 'Partido Colombiano',
             number: 1,
             corporation_id: 1,
+            organizationId: 1,
             campaignId: 1,
             campaign: {
               id: 1,
@@ -136,13 +146,17 @@ export class CandidateController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('search') search?: string,
+    @Query('organizationId') organizationId?: string,
   ) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
+    const orgId = organizationId ? parseInt(organizationId, 10) : undefined;
+
     return await this.candidateService.findAllWithPagination(
       pageNum,
       limitNum,
       search,
+      orgId,
     );
   }
 
@@ -169,6 +183,7 @@ export class CandidateController {
           party: 'Partido Colombiano',
           number: 1,
           corporation_id: 1,
+          organizationId: 1,
           campaignId: 1,
           campaign: {
             id: 1,
@@ -186,6 +201,7 @@ export class CandidateController {
           party: 'Partido Liberal',
           number: 2,
           corporation_id: 1,
+          organizationId: 1,
           campaignId: 1,
           campaign: {
             id: 1,
@@ -200,7 +216,6 @@ export class CandidateController {
       ],
     },
   })
-
   @ApiResponse({
     status: 200,
     description: 'No candidates found for the campaign',
@@ -236,9 +251,10 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        organizationId: 1,
         userId: null,
         campaignId: 1,
-        Campaign:{
+        campaign: {
           id: 1,
           name: 'Campaign A',
           startDate: '2024-01-01',
@@ -255,7 +271,6 @@ export class CandidateController {
     status: 404,
     description: 'Candidate not found',
   })
-
   async findOne(@Param('id') id: string): Promise<Candidate | null> {
     return await this.candidateService.findOne(+id);
   }
@@ -282,6 +297,7 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        organizationId: 1,
         userId: 1,
         campaignId: 1,
         campaign: {
@@ -334,12 +350,6 @@ export class CandidateController {
       },
       example3: {
         value: {
-          CampaignId: null,
-        },
-        description: 'Update multiple fields including campaign',
-      },
-      example4: {
-        value: {
           name: 'Juan Duarte',
           party: 'Partido Conservador',
           campaignId: 1,
@@ -358,9 +368,10 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        organizationId: 1,
         userId: null,
         campaignId: 2,
-        Campaign: {
+        campaign: {
           id: 2,
           name: 'Campaign B',
           startDate: '2026-01-01',
@@ -434,6 +445,7 @@ export class CandidateController {
         party: 'Partido Colombiano',
         number: 1,
         corporation_id: 1,
+        organizationId: 1,
         campaignId: 1,
         leaders: [
           {
@@ -564,6 +576,7 @@ export class CandidateController {
           party: 'Partido Colombiano',
           number: 1,
           corporation_id: 1,
+          organizationId: 1,
           campaignId: 1,
           campaign: {
             id: 1,
