@@ -5,32 +5,51 @@ import {
   IsDateString,
   IsNumber,
   IsOptional,
+  Validate,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import {
+  NumericOnlyValidator,
+  PhoneFormatValidator,
+  NameFormatValidator,
+} from '../../../common/validators/no-whitespace.validator';
 
 export class CreateVoterDto {
   @ApiProperty({
-    example: 'Juan',
-    description: 'Voter first name (required)',
+    example: 'JOSE ANGEL',
+    description:
+      'Voter first name (required, can have spaces in the middle, will be stored in uppercase)',
   })
   @IsString()
   @IsNotEmpty()
+  @Validate(NameFormatValidator)
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase().trim() : value,
+  )
   firstName: string;
 
   @ApiProperty({
-    example: 'Pérez García',
-    description: 'Voter last name (required)',
+    example: 'DIAZ ALFARO',
+    description:
+      'Voter last name (required, can have spaces in the middle, will be stored in uppercase)',
   })
   @IsString()
   @IsNotEmpty()
+  @Validate(NameFormatValidator)
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase().trim() : value,
+  )
   lastName: string;
 
   @ApiProperty({
     example: '1234567890',
-    description: 'Voter identification number (required)',
+    description: 'Voter identification number (required, numbers only)',
   })
   @IsString()
   @IsNotEmpty()
+  @Validate(NumericOnlyValidator)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   identification: string;
 
   @ApiProperty({
@@ -61,12 +80,14 @@ export class CreateVoterDto {
   birthDate?: string;
 
   @ApiProperty({
-    example: '+57 312 123 4567',
-    description: 'Voter phone number (optional)',
+    example: '3121234567',
+    description: 'Voter phone number (optional, numbers only)',
     required: false,
   })
   @IsString()
   @IsOptional()
+  @Validate(PhoneFormatValidator)
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   phone?: string;
 
   @ApiProperty({
@@ -104,12 +125,15 @@ export class CreateVoterDto {
   neighborhood?: string;
 
   @ApiProperty({
-    example: 'voter@example.com',
-    description: 'Voter email address (optional)',
+    example: 'VOTER@EXAMPLE.COM',
+    description: 'Voter email address (optional, will be stored in uppercase)',
     required: false,
   })
   @IsEmail()
   @IsOptional()
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.toUpperCase().trim() : value,
+  )
   email?: string;
 
   @ApiProperty({

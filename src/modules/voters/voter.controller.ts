@@ -573,7 +573,7 @@ export class VoterController {
   }
 
   @Get('report/general')
-  @Permission('voters:read')
+  @Permission('reports:read')
   @ApiOperation({
     summary: 'Get voter report with filters and aggregations',
     description:
