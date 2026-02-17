@@ -25,31 +25,29 @@ export class LeaderService {
     createLeaderDto: CreateLeaderDto,
     authenticatedUser?: any,
   ): Promise<Leader> {
+    // ✅ NO necesitamos organizationId en el DTO
+    // El organizationId viene del User a través del userId
+    
     const leader = this.leaderRepository.create(createLeaderDto);
     const savedLeader = await this.leaderRepository.save(leader);
 
-    // Si el usuario autenticado es candidato, crear la relación candidate_leader
     if (authenticatedUser?.roleId === 3 && authenticatedUser?.id) {
       try {
-        // Obtener el candidato asociado al usuario con sus líderes
         const candidate = await this.candidateRepository.findOne({
           where: { userId: authenticatedUser.id },
           relations: ['leaders'],
         });
 
         if (candidate) {
-          // Agregar el líder a los líderes del candidato
           if (!candidate.leaders) {
             candidate.leaders = [];
           }
-          // Verificar que no esté duplicado
           if (!candidate.leaders.some((l) => l.id === savedLeader.id)) {
             candidate.leaders.push(savedLeader);
             await this.candidateRepository.save(candidate);
           }
         }
       } catch (err) {
-        // Si falla la asignación, no fallar la creación del líder
         console.error('Error assigning leader to candidate:', err);
       }
     }
@@ -59,7 +57,7 @@ export class LeaderService {
 
   async findAll(): Promise<Leader[]> {
     return await this.leaderRepository.find({
-      relations: ['campaign', 'candidates'],
+      relations: ['campaign', 'candidates', 'user'],
     });
   }
 
@@ -67,6 +65,7 @@ export class LeaderService {
     page: number = 1,
     limit: number = 10,
     search?: string,
+    organizationId?: number,
   ): Promise<{
     data: Leader[];
     total: number;
@@ -77,7 +76,13 @@ export class LeaderService {
     const skip = (page - 1) * limit;
     const query = this.leaderRepository
       .createQueryBuilder('leader')
-      .leftJoinAndSelect('leader.campaign', 'campaign');
+      .leftJoinAndSelect('leader.campaign', 'campaign')
+      .leftJoinAndSelect('leader.user', 'user');
+
+    // ✅ FILTRAR por organizationId a través de USER
+    if (organizationId) {
+      query.andWhere('user.organizationId = :organizationId', { organizationId });
+    }
 
     if (search && search.trim()) {
       query.andWhere(
@@ -87,6 +92,7 @@ export class LeaderService {
     }
 
     const [leaders, total] = await query
+      .orderBy('leader.createdAt', 'DESC')
       .skip(skip)
       .take(limit)
       .getManyAndCount();
@@ -109,7 +115,8 @@ export class LeaderService {
 
     return await this.leaderRepository.find({
       where: { campaignId },
-      relations: ['campaign', 'candidates'],
+      relations: ['campaign', 'candidates', 'user'],
+      order: { createdAt: 'DESC' },
     });
   }
 
@@ -135,10 +142,10 @@ export class LeaderService {
     const query = this.leaderRepository
       .createQueryBuilder('leader')
       .leftJoinAndSelect('leader.campaign', 'campaign')
+      .leftJoinAndSelect('leader.user', 'user')
       .innerJoin('candidate_leader', 'cl', 'cl.leader_id = leader.id')
       .where('cl.candidate_id = :candidateId', { candidateId });
 
-    // ✅ FIX: Lógica de búsqueda correcta con paréntesis
     if (search && search.trim()) {
       query.andWhere(
         `(LOWER(leader.name) LIKE LOWER(:search) OR LOWER(leader.document) LIKE LOWER(:search) OR LOWER(leader.municipality) LIKE LOWER(:search))`,
@@ -147,6 +154,7 @@ export class LeaderService {
     }
 
     const [leaders, total] = await query
+      .orderBy('leader.createdAt', 'DESC')
       .skip(skip)
       .take(limit)
       .distinct(true)
@@ -164,14 +172,14 @@ export class LeaderService {
   async findOne(id: number): Promise<Leader | null> {
     return await this.leaderRepository.findOne({
       where: { id },
-      relations: ['campaign', 'candidates'],
+      relations: ['campaign', 'candidates', 'user'],
     });
   }
 
   async findByUserId(userId: number): Promise<Leader | null> {
     return await this.leaderRepository.findOne({
       where: { userId },
-      relations: ['campaign', 'candidates'],
+      relations: ['campaign', 'candidates', 'user'],
     });
   }
 
@@ -184,20 +192,16 @@ export class LeaderService {
   }
 
   async remove(id: number): Promise<void> {
-    // Cargar el líder con su usuario asociado
     const leader = await this.leaderRepository.findOne({
       where: { id },
       relations: ['candidates', 'user'],
     });
 
     if (leader) {
-      // Si el líder tiene un usuario asociado, eliminarlo también
       if (leader.userId) {
+        // ✅ Al eliminar el usuario, se pierden todos sus datos incluyendo organizationId
         await this.userRepository.delete(leader.userId);
       }
-
-      // TypeORM eliminará automáticamente las relaciones en candidate_leader
-      // porque tenemos cascade: true y onDelete: 'CASCADE' configurados
       await this.leaderRepository.remove(leader);
     }
   }
@@ -221,17 +225,14 @@ export class LeaderService {
   ): Promise<Leader> {
     const leader = await this.leaderRepository.findOne({
       where: { id: leaderId },
-      relations: ['candidates', 'campaign'],
+      relations: ['candidates', 'campaign', 'user'],
     });
 
     if (!leader) {
       throw new NotFoundException(`Leader with ID ${leaderId} not found`);
     }
 
-    // Obtener los candidatos por sus IDs
     const candidates = await this.candidateRepository.findByIds(candidateIds);
-
-    // Asignar los candidatos al líder (reemplazar completamente)
     leader.candidates = candidates;
 
     return await this.leaderRepository.save(leader);
@@ -243,18 +244,15 @@ export class LeaderService {
   ): Promise<Leader> {
     const leader = await this.leaderRepository.findOne({
       where: { id: leaderId },
-      relations: ['candidates', 'campaign'],
+      relations: ['candidates', 'campaign', 'user'],
     });
 
     if (!leader) {
       throw new NotFoundException(`Leader with ID ${leaderId} not found`);
     }
 
-    // Obtener los candidatos por sus IDs
     const candidates = await this.candidateRepository.findByIds(candidateIds);
-
-    // Agregar los candidatos sin reemplazar los existentes
-    leader.candidates = [...leader.candidates, ...candidates];
+    leader.candidates = [...(leader.candidates || []), ...candidates];
 
     return await this.leaderRepository.save(leader);
   }
@@ -265,15 +263,14 @@ export class LeaderService {
   ): Promise<Leader> {
     const leader = await this.leaderRepository.findOne({
       where: { id: leaderId },
-      relations: ['candidates', 'campaign'],
+      relations: ['candidates', 'campaign', 'user'],
     });
 
     if (!leader) {
       throw new NotFoundException(`Leader with ID ${leaderId} not found`);
     }
 
-    // Filtrar los candidatos para remover los especificados
-    leader.candidates = leader.candidates.filter(
+    leader.candidates = (leader.candidates || []).filter(
       (c) => !candidateIds.includes(c.id),
     );
 
