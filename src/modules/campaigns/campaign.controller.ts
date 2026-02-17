@@ -112,82 +112,19 @@ export class CampaignsController {
     return this.campaignsService.create(createCampaignDto, currentUser);
   }
 
-  @Get()
+  @Get('me/my-campaigns')
   @Permission('campaigns:read')
   @ApiOperation({
-    summary: 'Get all campaigns',
+    summary: 'Get authenticated user campaigns',
     description:
-      'Returns a list of all campaigns. Organization admins will only see campaigns from their organization.',
-  })
-  @ApiQuery({
-    name: 'page',
-    type: 'number',
-    required: false,
-    description: 'Page number (starts at 1)',
-    example: 1,
-  })
-  @ApiQuery({
-    name: 'limit',
-    type: 'number',
-    required: false,
-    description: 'Items per page',
-    example: 10,
+      'Returns campaigns for the authenticated user. Organization admins see their organization campaigns, super admins see all campaigns.',
   })
   @ApiResponse({
     status: 200,
-    description: 'List of campaigns',
-    schema: {
-      example: [
-        {
-          id: 1,
-          name: 'Campaña Electoral 2024',
-          description: 'Campaña municipal para el año 2024',
-          startDate: '2024-01-15',
-          endDate: '2024-12-31',
-          status: true,
-          organizationId: 1,
-          organization: {
-            id: 1,
-            name: 'Organización A',
-          },
-          candidates: [
-            {
-              id: 1,
-              name: 'Juan Duarte',
-              party: 'Partido Colombiano',
-              number: 1,
-            },
-          ],
-          leaders: [
-            {
-              id: 1,
-              name: 'Juan López',
-              document: '12345678',
-              municipality: 'Bogotá',
-            },
-          ],
-          campaignUsers: [
-            {
-              id: 1,
-              userId: 1,
-              user: {
-                id: 1,
-                name: 'Juan Pérez',
-              },
-            },
-          ],
-          createdAt: '2026-02-06T12:00:00Z',
-          updatedAt: '2026-02-06T12:00:00Z',
-        },
-      ],
-    },
+    description: 'User campaigns retrieved successfully',
   })
-  async findAll(
-    @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10',
-    @CurrentUser() currentUser: User,
-  ) {
-    return this.campaignsService.findAll(currentUser);
+  async getUserCampaigns(@CurrentUser() currentUser: User) {
+    return this.campaignsService.findByUser(currentUser);
   }
 
   @Get('organization/:organizationId')
@@ -224,12 +161,165 @@ export class CampaignsController {
       ],
     },
   })
-  @ApiResponse({ status: 403, description: 'Not authorized to view this organization campaigns' })
+  @ApiResponse({
+    status: 403,
+    description: 'Not authorized to view this organization campaigns',
+  })
   async findByOrganization(
     @Param('organizationId') organizationId: string,
     @CurrentUser() currentUser: User,
   ) {
-    return this.campaignsService.findByOrganization(+organizationId, currentUser);
+    return this.campaignsService.findByOrganization(
+      +organizationId,
+      currentUser,
+    );
+  }
+
+  @Get()
+  @Permission('campaigns:read')
+  @ApiOperation({
+    summary: 'Get all campaigns with pagination',
+    description:
+      'Returns a list of all campaigns with pagination. Organization admins will only see campaigns from their organization.',
+  })
+  @ApiQuery({
+    name: 'page',
+    type: 'number',
+    required: false,
+    description: 'Page number (starts at 1)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Items per page',
+    example: 10,
+  })
+  @ApiQuery({
+    name: 'search',
+    type: 'string',
+    required: false,
+    description: 'Search term for campaign name or description',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of campaigns',
+    schema: {
+      example: {
+        data: [
+          {
+            id: 1,
+            name: 'Campaña Electoral 2024',
+            description: 'Campaña municipal para el año 2024',
+            startDate: '2024-01-15',
+            endDate: '2024-12-31',
+            status: true,
+            organizationId: 1,
+            organization: {
+              id: 1,
+              name: 'Organización A',
+            },
+            candidates: [],
+            leaders: [],
+            campaignUsers: [],
+            createdAt: '2026-02-06T12:00:00Z',
+            updatedAt: '2026-02-06T12:00:00Z',
+          },
+        ],
+        page: 1,
+        limit: 10,
+        total: 1,
+        pages: 1,
+      },
+    },
+  })
+  async findAll(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search: string = '',
+    @CurrentUser() currentUser: User,
+  ) {
+    return this.campaignsService.findAll(
+      currentUser,
+      parseInt(page) || 1,
+      parseInt(limit) || 10,
+      search,
+    );
+  }
+
+  @Get(':id/candidates')
+  @Permission('campaigns:read')
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiOperation({
+    summary: 'Get candidates of a campaign',
+    description: 'Returns all candidates registered in a specific campaign',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of candidates in the campaign',
+    schema: {
+      example: [
+        {
+          id: 1,
+          name: 'Juan Duarte',
+          party: 'Partido Colombiano',
+          number: 1,
+          corporation_id: 1,
+        },
+      ],
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getCandidates(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    const campaign = await this.campaignsService.findOne(+id, currentUser);
+    return campaign.candidates || [];
+  }
+
+  @Get(':id/leaders')
+  @Permission('campaigns:read')
+  @ApiParam({
+    name: 'id',
+    type: 'number',
+    description: 'Campaign ID',
+    example: 1,
+  })
+  @ApiOperation({
+    summary: 'Get leaders of a campaign',
+    description: 'Returns all leaders working in a specific campaign',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of leaders in the campaign',
+    schema: {
+      example: [
+        {
+          id: 1,
+          name: 'Juan López',
+          document: '12345678',
+          municipality: 'Bogotá',
+          phone: '+57 312 123 4567',
+        },
+      ],
+    },
+  })
+  @ApiResponse({ status: 403, description: 'Not authorized' })
+  @ApiResponse({ status: 404, description: 'Campaign not found' })
+  async getLeaders(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: User,
+  ) {
+    const campaign = await this.campaignsService.findOne(+id, currentUser);
+    return campaign.leaders || [];
   }
 
   @Get(':id')
@@ -498,79 +588,5 @@ export class CampaignsController {
       +userId,
       currentUser,
     );
-  }
-
-  @Get(':id/candidates')
-  @Permission('campaigns:read')
-  @ApiParam({
-    name: 'id',
-    type: 'number',
-    description: 'Campaign ID',
-    example: 1,
-  })
-  @ApiOperation({
-    summary: 'Get candidates of a campaign',
-    description: 'Returns all candidates registered in a specific campaign',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'List of candidates in the campaign',
-    schema: {
-      example: [
-        {
-          id: 1,
-          name: 'Juan Duarte',
-          party: 'Partido Colombiano',
-          number: 1,
-          corporation_id: 1,
-        },
-      ],
-    },
-  })
-  @ApiResponse({ status: 403, description: 'Not authorized' })
-  @ApiResponse({ status: 404, description: 'Campaign not found' })
-  async getCandidates(
-    @Param('id') id: string,
-    @CurrentUser() currentUser: User,
-  ) {
-    const campaign = await this.campaignsService.findOne(+id, currentUser);
-    return campaign.candidates || [];
-  }
-
-  @Get(':id/leaders')
-  @Permission('campaigns:read')
-  @ApiParam({
-    name: 'id',
-    type: 'number',
-    description: 'Campaign ID',
-    example: 1,
-  })
-  @ApiOperation({
-    summary: 'Get leaders of a campaign',
-    description: 'Returns all leaders working in a specific campaign',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'List of leaders in the campaign',
-    schema: {
-      example: [
-        {
-          id: 1,
-          name: 'Juan López',
-          document: '12345678',
-          municipality: 'Bogotá',
-          phone: '+57 312 123 4567',
-        },
-      ],
-    },
-  })
-  @ApiResponse({ status: 403, description: 'Not authorized' })
-  @ApiResponse({ status: 404, description: 'Campaign not found' })
-  async getLeaders(
-    @Param('id') id: string,
-    @CurrentUser() currentUser: User,
-  ) {
-    const campaign = await this.campaignsService.findOne(+id, currentUser);
-    return campaign.leaders || [];
   }
 }

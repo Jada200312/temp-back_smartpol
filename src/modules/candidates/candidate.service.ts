@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Candidate } from '../../database/entities/candidate.entity';
@@ -21,20 +21,82 @@ export class CandidateService {
     private readonly campaignRepository: Repository<Campaign>,
   ) {}
 
-  async create(createCandidateDto: CreateCandidateDto): Promise<Candidate> {
-    const candidate = this.candidateRepository.create(createCandidateDto);
-    return await this.candidateRepository.save(candidate);
+  async create(createCandidateDto: CreateCandidateDto, authUserId: number): Promise<Candidate> {
+    const { userId, campaignId, ...candidateData } = createCandidateDto;
+
+    // 1. Obtener el usuario autenticado y su organizationId
+    const authUser = await this.userRepository.findOne({
+      where: { id: authUserId },
+    });
+
+    if (!authUser) {
+      throw new ForbiddenException('Authenticated user not found');
+    }
+
+    if (!authUser.organizationId) {
+      throw new ForbiddenException('Authenticated user does not belong to any organization');
+    }
+
+    // 2. Validar que el usuario candidato existe
+    if (userId) {
+      const candidateUser = await this.userRepository.findOne({
+        where: { id: userId },
+      });
+
+      if (!candidateUser) {
+        throw new BadRequestException(`User with ID ${userId} not found`);
+      }
+    }
+
+    // 3. Si existe campaignId, validar que pertenece a la misma organización
+    if (campaignId) {
+      const campaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+      });
+
+      if (!campaign) {
+        throw new BadRequestException(
+          `Campaign with ID ${campaignId} not found`,
+        );
+      }
+
+      // Validar que la campaña pertenece a la organización del usuario autenticado
+      if (campaign.organizationId !== authUser.organizationId) {
+        throw new ForbiddenException(
+          `Campaign ${campaignId} does not belong to your organization`,
+        );
+      }
+    }
+
+    // 4. Crear el candidato con la organizationId del usuario autenticado
+    const candidate = this.candidateRepository.create({
+      ...candidateData,
+      userId,
+      campaignId,
+    });
+
+    const savedCandidate = await this.candidateRepository.save(candidate);
+
+    // Retornar el candidato encontrado, garantizando que existe
+    const foundCandidate = await this.findOne(savedCandidate.id);
+    
+    if (!foundCandidate) {
+      throw new BadRequestException('Failed to retrieve the created candidate');
+    }
+
+    return foundCandidate;
   }
 
   async findAll(): Promise<Candidate[]> {
-    return await this.candidateRepository.find({ relations: ['corporation', 'organization'] });
+    return await this.candidateRepository.find({ 
+      relations: ['corporation', 'campaign', 'user'] 
+    });
   }
 
   async findAllWithPagination(
     page: number = 1,
     limit: number = 10,
     search?: string,
-    organizationId?: number,
   ): Promise<{
     data: Candidate[];
     total: number;
@@ -46,13 +108,8 @@ export class CandidateService {
     const query = this.candidateRepository
       .createQueryBuilder('candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
-      .leftJoinAndSelect('candidate.organization', 'organization')
-      .leftJoinAndSelect('candidate.campaign', 'campaign');
-
-    // Filtrar por organizationId si se proporciona
-    if (organizationId) {
-      query.where('candidate.organizationId = :organizationId', { organizationId });
-    }
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
+      .leftJoinAndSelect('candidate.user', 'user');
 
     if (search && search.trim()) {
       const searchCondition = `(
@@ -61,17 +118,10 @@ export class CandidateService {
         OR CAST(candidate.number AS CHAR) LIKE :searchNumber
       )`;
       
-      if (organizationId) {
-        query.andWhere(searchCondition, {
-          search: `%${search}%`,
-          searchNumber: `%${search}%`,
-        });
-      } else {
-        query.where(searchCondition, {
-          search: `%${search}%`,
-          searchNumber: `%${search}%`,
-        });
-      }
+      query.where(searchCondition, {
+        search: `%${search}%`,
+        searchNumber: `%${search}%`,
+      });
     }
 
     const [candidates, total] = await query
@@ -91,21 +141,21 @@ export class CandidateService {
   async findOne(id: number): Promise<Candidate | null> {
     return await this.candidateRepository.findOne({
       where: { id },
-      relations: ['corporation', 'organization', 'leaders', 'campaign'],
+      relations: ['corporation', 'leaders', 'campaign', 'user'],
     });
   }
 
   async findByUserId(userId: number): Promise<Candidate | null> {
     return await this.candidateRepository.findOne({
       where: { userId },
-      relations: ['corporation', 'organization', 'leaders', 'campaign'],
+      relations: ['corporation', 'leaders', 'campaign', 'user'],
     });
   }
 
   async findByCampaignIds(campaignIds: number[]): Promise<Candidate[]> {
     return await this.candidateRepository.find({
       where: { campaignId: In(campaignIds) },
-      relations: ['corporation', 'organization', 'leaders', 'campaign'],
+      relations: ['corporation', 'leaders', 'campaign', 'user'],
     });
   }
 
@@ -113,14 +163,49 @@ export class CandidateService {
     id: number,
     updateCandidateDto: UpdateCandidateDto,
   ): Promise<Candidate | null> {
-    await this.candidateRepository.update(id, updateCandidateDto);
+    const candidate = await this.candidateRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!candidate) {
+      throw new NotFoundException(`Candidate with ID ${id} not found`);
+    }
+
+    const { campaignId, ...updateData } = updateCandidateDto;
+
+    // Validar cambio de campaña si se proporciona
+    if (campaignId && candidate.user) {
+      const campaign = await this.campaignRepository.findOne({
+        where: { id: campaignId },
+      });
+
+      if (!campaign) {
+        throw new BadRequestException(
+          `Campaign with ID ${campaignId} not found`,
+        );
+      }
+
+      // Validar que la campaña pertenece a la organización del usuario candidato
+      if (campaign.organizationId !== candidate.user.organizationId) {
+        throw new BadRequestException(
+          `Campaign ${campaignId} does not belong to candidate's organization`,
+        );
+      }
+    }
+
+    await this.candidateRepository.update(id, {
+      ...updateData,
+      ...(campaignId && { campaignId }),
+    });
+
     return await this.findOne(id);
   }
 
   async remove(id: number): Promise<void> {
     const candidate = await this.candidateRepository.findOne({
       where: { id },
-      relations: ['leaders', 'user'],
+      relations: ['user'],
     });
 
     if (candidate) {
@@ -206,8 +291,8 @@ export class CandidateService {
         { leaderId },
       )
       .innerJoinAndSelect('candidate.corporation', 'corporation')
-      .leftJoinAndSelect('candidate.organization', 'organization')
       .leftJoinAndSelect('candidate.campaign', 'campaign')
+      .leftJoinAndSelect('candidate.user', 'user')
       .where('candidate.corporation_id = :corporationId', { corporationId })
       .setParameter('leaderId', leaderId)
       .setParameter('corporationId', corporationId)

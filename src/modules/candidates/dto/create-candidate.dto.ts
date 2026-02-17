@@ -36,26 +36,19 @@ export class CreateCandidateDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Organization ID that the candidate belongs to (required)',
-  })
-  @IsNumber()
-  @IsNotEmpty()
-  organizationId: number;
-
-  @ApiProperty({
-    example: 1,
-    description: 'User ID associated with the candidate (optional)',
-  })
-  @IsNumber()
-  @IsOptional()
-  userId?: number;
-
-  @ApiProperty({
-    example: 1,
     description: 'Campaign ID that the candidate belongs to (optional)',
     required: false,
   })
   @IsNumber()
   @IsOptional()
   campaignId?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'User ID associated with the candidate (optional)',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  userId?: number;
 }

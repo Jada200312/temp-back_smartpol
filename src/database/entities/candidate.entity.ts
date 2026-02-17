@@ -15,14 +15,12 @@ import { Leader } from './leader.entity';
 import { Voter } from './voter.entity';
 import { User } from './user.entity';
 import { Campaign } from './campaigns.entity';
-import { Organization } from './organizations.entity';
 
 @Entity('candidates')
 @Index(['name'])
 @Index(['party'])
 @Index(['number'])
 @Index(['corporation_id'])
-@Index(['organizationId'])
 @Index(['userId'])
 @Index(['campaignId'])
 @Index(['createdAt'])
@@ -45,13 +43,6 @@ export class Candidate {
 
   @Column()
   corporation_id: number;
-
-  @ManyToOne(() => Organization, { nullable: true })
-  @JoinColumn({ name: 'organizationId' })
-  organization: Organization;
-
-  @Column()
-  organizationId: number;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'userId' })
