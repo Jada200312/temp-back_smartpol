@@ -25,7 +25,7 @@ import { User } from './user.entity';
 @Index(['firstName', 'lastName'])
 @Index(['email'])
 @Index(['phone'])
-@Index(['createdByUserId'])
+@Index(['createdByUserId']) // conservar índice
 export class Voter {
   @PrimaryGeneratedColumn()
   id: number;
@@ -98,6 +98,7 @@ export class Voter {
   })
   candidates: Candidate[];
 
+  // Mantener columna y relación para creador
   @Column({ nullable: true })
   createdByUserId: number;
 
@@ -105,10 +106,11 @@ export class Voter {
   @JoinColumn({ name: 'createdByUserId' })
   createdByUser: User;
 
+  // Mantener propiedad virtual de líderes
+  leaders?: Leader[] | null;
+
   @CreateDateColumn()
   createdAt: Date;
-
-  leaders?: Leader[] | null;
 
   @UpdateDateColumn()
   updatedAt: Date;
