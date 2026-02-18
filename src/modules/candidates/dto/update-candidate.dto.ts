@@ -36,6 +36,14 @@ export class UpdateCandidateDto {
 
   @ApiProperty({
     example: 1,
+    description: 'Campaign ID that the candidate belongs to (optional)',
+  })
+  @IsNumber()
+  @IsOptional()
+  campaignId?: number;
+
+  @ApiProperty({
+    example: 1,
     description: 'User ID associated with the candidate (optional)',
   })
   @IsNumber()

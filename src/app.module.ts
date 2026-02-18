@@ -15,6 +15,8 @@ import { MunicipalityModule } from './modules/municipalities/municipality.module
 import { VotingBoothModule } from './modules/voting-booths/voting-booth.module';
 import { VotingTableModule } from './modules/voting-tables/voting-table.module';
 import { PermissionsModule } from './permissions/permissions.module';
+import { OrganizationsModule } from './modules/organizations/organization.module';
+import { CampaignsModule } from './modules/campaigns/campaign.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import {
   User,
@@ -31,6 +33,9 @@ import {
   Permission,
   RolePermission,
   UserPermission,
+  Organization,
+  Campaign,
+  CampaignUser,
 } from './database/entities';
 
 @Module({
@@ -61,6 +66,9 @@ import {
         Permission,
         RolePermission,
         UserPermission,
+        Organization,
+        Campaign,
+        CampaignUser,
       ],
       synchronize: false,
       logging:
@@ -95,6 +103,9 @@ import {
       Permission,
       RolePermission,
       UserPermission,
+      Organization,
+      Campaign,
+      CampaignUser,
     ]),
     AuthModule,
     CorporationModule,
@@ -107,6 +118,8 @@ import {
     VotingBoothModule,
     VotingTableModule,
     PermissionsModule,
+    OrganizationsModule,
+    CampaignsModule,
   ],
   controllers: [AppController],
   providers: [

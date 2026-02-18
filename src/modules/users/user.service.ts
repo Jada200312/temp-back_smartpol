@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../../database/entities/user.entity';
+import { CampaignUser } from '../../database/entities/campaign-user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
@@ -11,26 +12,49 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(CampaignUser)
+    private readonly campaignUserRepository: Repository<CampaignUser>,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
+    const { campaignIds, organizationId, ...userData } = createUserDto;
+    
     // Hash la contraseña antes de guardar
-    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-    const user = this.userRepository.create({
-      ...createUserDto,
+    const hashedPassword = await bcrypt.hash(userData.password, 10);
+    
+    const userCreateData: any = {
+      ...userData,
       password: hashedPassword,
-    });
-    return await this.userRepository.save(user);
+    };
+
+    // Solo agregar organizationId si existe
+    if (organizationId) {
+      userCreateData.organizationId = organizationId;
+    }
+
+    const user = this.userRepository.create(userCreateData);
+    const savedUser = await this.userRepository.save(user);
+
+    // Asegurar que savedUser es un objeto, no un array
+    const userIdToUse = (savedUser as any)?.id;
+
+    if (campaignIds && campaignIds.length > 0 && userIdToUse) {
+      await this.assignUserToCampaigns(userIdToUse, campaignIds);
+    }
+
+    return (await this.findOne(userIdToUse))!;
   }
 
   async findAll(): Promise<User[]> {
-    return await this.userRepository.find();
+    return await this.userRepository.find({
+      relations: ['campaignUsers', 'campaignUsers.campaign'],
+    });
   }
 
   async findByRole(roleId: number): Promise<User[]> {
     return await this.userRepository.find({
       where: { roleId },
-      relations: ['role'],
+      relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
     });
   }
 
@@ -49,6 +73,8 @@ export class UserService {
     const skip = (page - 1) * limit;
     const query = this.userRepository
       .createQueryBuilder('user')
+      .leftJoinAndSelect('user.campaignUsers', 'campaignUsers')
+      .leftJoinAndSelect('campaignUsers.campaign', 'campaign')
       .where('user.roleId = :roleId', { roleId });
 
     if (search && search.trim()) {
@@ -71,23 +97,32 @@ export class UserService {
   async findOne(id: number): Promise<User | null> {
     return await this.userRepository.findOne({
       where: { id },
-      relations: ['role'],
+      relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
     });
   }
 
   async findByEmail(email: string): Promise<User | null> {
     return await this.userRepository.findOne({
       where: { email },
-      relations: ['role'],
+      relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
     });
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User | null> {
+    const { campaignIds, ...userData } = updateUserDto;
+
     // Si se actualiza la contraseña, hashearla
-    if (updateUserDto.password) {
-      updateUserDto.password = await bcrypt.hash(updateUserDto.password, 10);
+    if (userData.password) {
+      userData.password = await bcrypt.hash(userData.password, 10);
     }
-    await this.userRepository.update(id, updateUserDto);
+    
+    await this.userRepository.update(id, userData);
+
+    if (campaignIds && campaignIds.length > 0) {
+      await this.campaignUserRepository.delete({ userId: id });
+      await this.assignUserToCampaigns(id, campaignIds);
+    }
+
     return await this.findOne(id);
   }
 
@@ -97,5 +132,22 @@ export class UserService {
 
   async remove(id: number): Promise<void> {
     await this.userRepository.delete(id);
+  }
+
+  async assignUserToCampaigns(userId: number, campaignIds: number[]) {
+    const campaignUsers = campaignIds.map((campaignId) =>
+      this.campaignUserRepository.create({
+        userId,
+        campaignId,
+      }),
+    );
+    return await this.campaignUserRepository.save(campaignUsers);
+  }
+
+  async removeUserFromCampaign(userId: number, campaignId: number) {
+    return await this.campaignUserRepository.delete({
+      userId,
+      campaignId,
+    });
   }
 }

@@ -27,6 +27,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Users')
 @Controller('users')
+@ApiBearerAuth('access-token')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
@@ -218,5 +219,57 @@ export class UserController {
   })
   async remove(@Param('id') id: string): Promise<void> {
     return await this.userService.remove(+id);
+  }
+
+  @Post(':userId/campaigns/:campaignId')
+  @Permission('users:update')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiParam({
+    name: 'userId',
+    type: 'number',
+    description: 'User ID',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: 'number',
+    description: 'Campaign ID',
+  })
+  @ApiOperation({ summary: 'Assign user to campaign' })
+  @ApiResponse({
+    status: 201,
+    description: 'User assigned to campaign successfully',
+  })
+  assignUserToCampaign(
+    @Param('userId') userId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.userService.assignUserToCampaigns(+userId, [+campaignId]);
+  }
+
+  @Delete(':userId/campaigns/:campaignId')
+  @Permission('users:update')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiParam({
+    name: 'userId',
+    type: 'number',
+    description: 'User ID',
+  })
+  @ApiParam({
+    name: 'campaignId',
+    type: 'number',
+    description: 'Campaign ID',
+  })
+  @ApiOperation({ summary: 'Remove user from campaign' })
+  @ApiResponse({
+    status: 200,
+    description: 'User removed from campaign successfully',
+  })
+  removeUserFromCampaign(
+    @Param('userId') userId: string,
+    @Param('campaignId') campaignId: string,
+  ) {
+    return this.userService.removeUserFromCampaign(+userId, +campaignId);
   }
 }

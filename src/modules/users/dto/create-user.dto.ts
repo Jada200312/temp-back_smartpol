@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
+  IsArray,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -34,4 +35,23 @@ export class CreateUserDto {
   @IsNumber()
   @IsOptional()
   roleId?: number;
+
+  @ApiProperty({
+    example: 1,
+    description: 'Organization ID (optional)',
+    required: false,
+  })
+  @IsNumber()
+  @IsOptional()
+  organizationId?: number;
+
+  @ApiProperty({
+    example: [1, 2, 3],
+    description: 'Campaign IDs to assign (optional)',
+    required: false,
+  })
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @IsOptional()
+  campaignIds?: number[];
 }

@@ -17,7 +17,7 @@ export class PermissionGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     // Obtener el permiso requerido del decorador
-    const requiredPermission = this.reflector.get<string>(
+    const requiredPermission = this.reflector.get<string | string[]>(
       PERMISSION_KEY,
       context.getHandler(),
     );
@@ -38,19 +38,27 @@ export class PermissionGuard implements CanActivate {
 
     const roleId = user.roleId || user.role?.id;
 
-    // Verificar el permiso
-    const hasPermission = await this.permissionsService.hasPermission(
-      user.id,
-      requiredPermission,
-      roleId,
-    );
+    // Soportar tanto string como array de permisos
+    const permissionsToCheck = Array.isArray(requiredPermission)
+      ? requiredPermission
+      : [requiredPermission];
 
-    if (!hasPermission) {
-      throw new ForbiddenException(
-        `No tiene permiso para: ${requiredPermission}`,
+    // Verificar si el usuario tiene ALGUNO de los permisos (OR logic)
+    for (const permission of permissionsToCheck) {
+      const hasPermission = await this.permissionsService.hasPermission(
+        user.id,
+        permission,
+        roleId,
       );
+
+      if (hasPermission) {
+        return true;
+      }
     }
 
-    return true;
+    // Si no tiene ninguno de los permisos, denegar
+    throw new ForbiddenException(
+      `No tiene permiso para: ${permissionsToCheck.join(' o ')}`,
+    );
   }
 }

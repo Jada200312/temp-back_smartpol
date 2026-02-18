@@ -13,3 +13,6 @@ export { Municipality } from './municipality.entity';
 export { CandidateVoter } from './candidate-voter.entity';
 export { VotingBooth } from './voting-booth.entity';
 export { VotingTable } from './voting-table.entity';
+export { Organization } from './organizations.entity';
+export { Campaign } from './campaigns.entity';
+export { CampaignUser } from './campaign-user.entity';

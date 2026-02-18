@@ -40,7 +40,10 @@ export class VoterService {
     private readonly votingBoothRepository: Repository<VotingBooth>,
   ) {}
 
-  async create(createVoterDto: CreateVoterDto): Promise<Voter> {
+  async create(
+    createVoterDto: CreateVoterDto,
+    createdByUserId?: number,
+  ): Promise<Voter> {
     // Validar que el departamento existe
     if (createVoterDto.departmentId) {
       const department = await this.departmentRepository.findOneBy({
@@ -99,7 +102,10 @@ export class VoterService {
       }
     }
 
-    const voter = this.voterRepository.create(createVoterDto);
+    const voter = this.voterRepository.create({
+      ...createVoterDto,
+      createdByUserId,
+    });
     return await this.voterRepository.save(voter);
   }
 
@@ -111,12 +117,152 @@ export class VoterService {
 
   async findAllPaginated(
     paginationQueryDto: PaginationQueryDto,
+    user?: any,
   ): Promise<PaginatedResponseDto<Voter>> {
     const { page = 1, limit = 20 } = paginationQueryDto;
     const skip = (page - 1) * limit;
 
+    // Build where clause
+    const where: any = {};
+
+    // If the user is a digitador (roleId = 5), only show voters they created
+    if (user && user.roleId === 5) {
+      where.createdByUserId = user.id;
+    }
+
+    // If the user is a campaign admin (roleId = 2), filter by organization
+    if (user && user.roleId === 2 && user.organizationId) {
+      // Get all campaigns for this organization
+      const campaigns = await this.voterRepository.query(
+        'SELECT id FROM campaigns WHERE "organizationId" = $1',
+        [user.organizationId],
+      );
+      const campaignIds = campaigns.map((c) => c.id);
+
+      // If no campaigns, return empty
+      if (campaignIds.length === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Get voter IDs from three sources using simpler approach
+      // 1. From candidates in these campaigns
+      const candidateVoterResults = await this.voterRepository.query(
+        `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "candidate_id" IN 
+         (SELECT id FROM candidates WHERE "campaignId" IN (${campaignIds.join(',')}))`,
+      );
+      const candidateVoterIds = candidateVoterResults.map((r) => r.voter_id);
+
+      // 2. From leaders in these campaigns
+      const leaderVoterResults = await this.voterRepository.query(
+        `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "leader_id" IN 
+         (SELECT id FROM leaders WHERE "campaignId" IN (${campaignIds.join(',')}))`,
+      );
+      const leaderVoterIds = leaderVoterResults.map((r) => r.voter_id);
+
+      // 3. From digitadores in this organization
+      const digitadorVoterResults = await this.voterRepository.query(
+        `SELECT DISTINCT id FROM voters WHERE "createdByUserId" IN 
+         (SELECT id FROM users WHERE "organizationId" = $1)`,
+        [user.organizationId],
+      );
+      const digitadorVoterIds = digitadorVoterResults.map((r) => r.id);
+
+      // Combine and deduplicate
+      const allVoterIds = [
+        ...new Set([
+          ...candidateVoterIds,
+          ...leaderVoterIds,
+          ...digitadorVoterIds,
+        ]),
+      ];
+
+      if (allVoterIds.length === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Get paginated results
+      const voters = await this.voterRepository.find({
+        where: { id: In(allVoterIds) },
+        skip,
+        take: limit,
+        relations: ['department', 'municipality', 'votingBooth'],
+      });
+
+      // Count total
+      const total = allVoterIds.length;
+
+      // Fetch candidates and leaders separately
+      const voterIds = voters.map((v) => v.id);
+      if (voterIds.length > 0) {
+        const candidateVoters = await this.candidateVoterRepository.find({
+          where: { voterId: In(voterIds) },
+          relations: ['candidate', 'leader'],
+        });
+
+        const candidateMap = new Map();
+        const leaderMap = new Map();
+
+        candidateVoters.forEach((cv) => {
+          if (!candidateMap.has(cv.voterId)) {
+            candidateMap.set(cv.voterId, []);
+          }
+          if (cv.candidate) {
+            candidateMap.get(cv.voterId).push(cv.candidate);
+          }
+
+          if (!leaderMap.has(cv.voterId)) {
+            leaderMap.set(cv.voterId, []);
+          }
+          if (cv.leader) {
+            leaderMap.get(cv.voterId).push(cv.leader);
+          }
+        });
+
+        voters.forEach((voter) => {
+          voter.candidates = candidateMap.get(voter.id) || [];
+          voter.leaders = leaderMap.get(voter.id) || [];
+        });
+      } else {
+        voters.forEach((voter) => {
+          voter.candidates = [];
+          voter.leaders = [];
+        });
+      }
+
+      const pages = Math.ceil(total / limit);
+      const hasNextPage = page < pages;
+      const hasPreviousPage = page > 1;
+
+      return {
+        data: voters,
+        page,
+        limit,
+        total,
+        pages,
+        hasNextPage,
+        hasPreviousPage,
+      };
+    }
+
     // Fetch voters without many-to-many relations to avoid cartesian product issues with pagination
     const [voters, total] = await this.voterRepository.findAndCount({
+      where,
       skip,
       take: limit,
       relations: ['department', 'municipality', 'votingBooth'],
@@ -213,9 +359,35 @@ export class VoterService {
   async findByCandidatePaginated(
     candidateId: number,
     paginationQueryDto: PaginationQueryDto,
+    user?: any,
   ): Promise<PaginatedResponseDto<Voter>> {
     const { page = 1, limit = 20 } = paginationQueryDto;
     const skip = (page - 1) * limit;
+
+    // If user is campaign admin (roleId=2), verify the candidate belongs to their organization
+    if (user && user.roleId === 2 && user.organizationId) {
+      const candidate = await this.candidateRepository.findOne({
+        where: { id: candidateId },
+        relations: ['campaign'],
+      });
+
+      if (
+        !candidate ||
+        !candidate.campaign ||
+        candidate.campaign.organizationId !== user.organizationId
+      ) {
+        // Return empty result if candidate doesn't belong to user's organization
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+    }
 
     // Fetch voters for this candidate
     const candidateVoters = await this.candidateVoterRepository.find({
@@ -224,8 +396,22 @@ export class VoterService {
     });
 
     const voterIds = candidateVoters.map((cv) => cv.voterId);
+
+    // If no voters are assigned to this candidate, return empty result
+    if (voterIds.length === 0) {
+      return {
+        data: [],
+        page,
+        limit,
+        total: 0,
+        pages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      };
+    }
+
     const [voters, total] = await this.voterRepository.findAndCount({
-      where: voterIds.length > 0 ? { id: In(voterIds) } : {},
+      where: { id: In(voterIds) },
       skip,
       take: limit,
       relations: ['department', 'municipality', 'votingBooth'],
@@ -285,9 +471,35 @@ export class VoterService {
   async findByLeaderPaginated(
     leaderId: number,
     paginationQueryDto: PaginationQueryDto,
+    user?: any,
   ): Promise<PaginatedResponseDto<Voter>> {
     const { page = 1, limit = 20 } = paginationQueryDto;
     const skip = (page - 1) * limit;
+
+    // If user is campaign admin (roleId=2), verify the leader belongs to their organization
+    if (user && user.roleId === 2 && user.organizationId) {
+      const leader = await this.leaderRepository.findOne({
+        where: { id: leaderId },
+        relations: ['campaign'],
+      });
+
+      if (
+        !leader ||
+        !leader.campaign ||
+        leader.campaign.organizationId !== user.organizationId
+      ) {
+        // Return empty result if leader doesn't belong to user's organization
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+    }
 
     // Fetch voters for this leader
     const candidateVoters = await this.candidateVoterRepository.find({
@@ -296,8 +508,22 @@ export class VoterService {
     });
 
     const voterIds = candidateVoters.map((cv) => cv.voterId);
+
+    // If no voters are assigned to this leader, return empty result
+    if (voterIds.length === 0) {
+      return {
+        data: [],
+        page,
+        limit,
+        total: 0,
+        pages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      };
+    }
+
     const [voters, total] = await this.voterRepository.findAndCount({
-      where: voterIds.length > 0 ? { id: In(voterIds) } : {},
+      where: { id: In(voterIds) },
       skip,
       take: limit,
       relations: ['department', 'municipality', 'votingBooth'],
@@ -358,6 +584,7 @@ export class VoterService {
     roleId?: number,
     candidateId?: number,
     leaderId?: number,
+    user?: any,
   ): Promise<Voter[]> {
     // Fetch voters based on role
     let voters: Voter[] = [];
@@ -388,9 +615,70 @@ export class VoterService {
           relations: ['department', 'municipality', 'votingBooth'],
         });
       }
+    } else if (roleId === 2 && user && user.organizationId) {
+      // Admin de campaña: traer votantes de su organización asociados a:
+      // 1. Candidatos de su organización
+      // 2. Líderes de su organización
+      // 3. Digitadores de su organización
+
+      // Get all campaigns for this organization
+      const campaigns = await this.voterRepository.query(
+        'SELECT id FROM campaigns WHERE "organizationId" = $1',
+        [user.organizationId],
+      );
+      const campaignIds = campaigns.map((c) => c.id);
+
+      // If campaigns exist, get voters from candidates and leaders
+      if (campaignIds.length > 0) {
+        // From candidates in these campaigns
+        const candidateVoterResults = await this.voterRepository.query(
+          `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "candidate_id" IN 
+           (SELECT id FROM candidates WHERE "campaignId" IN (${campaignIds.join(',')}))`,
+        );
+        const candidateVoterIds = candidateVoterResults.map((r) => r.voter_id);
+
+        // From leaders in these campaigns
+        const leaderVoterResults = await this.voterRepository.query(
+          `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "leader_id" IN 
+           (SELECT id FROM leaders WHERE "campaignId" IN (${campaignIds.join(',')}))`,
+        );
+        const leaderVoterIds = leaderVoterResults.map((r) => r.voter_id);
+
+        // From digitadores in this organization
+        const digitadorVoterResults = await this.voterRepository.query(
+          `SELECT DISTINCT id FROM voters WHERE "createdByUserId" IN 
+           (SELECT id FROM users WHERE "organizationId" = $1)`,
+          [user.organizationId],
+        );
+        const digitadorVoterIds = digitadorVoterResults.map((r) => r.id);
+
+        // Combine and deduplicate
+        const allVoterIds = [
+          ...new Set([
+            ...candidateVoterIds,
+            ...leaderVoterIds,
+            ...digitadorVoterIds,
+          ]),
+        ];
+
+        if (allVoterIds.length > 0) {
+          voters = await this.voterRepository.find({
+            where: { id: In(allVoterIds) },
+            relations: ['department', 'municipality', 'votingBooth'],
+          });
+        }
+      }
     } else {
-      // Otros roles: traer todos los votantes
+      // Otros roles: traer todos los votantes (o filtrar para digitadores)
+      const where: any = {};
+
+      // If the user is a digitador (roleId = 5), only show voters they created
+      if (user && user.roleId === 5) {
+        where.createdByUserId = user.id;
+      }
+
       voters = await this.voterRepository.find({
+        where,
         relations: ['department', 'municipality', 'votingBooth'],
       });
     }
@@ -652,7 +940,10 @@ export class VoterService {
     return results;
   }
 
-  async getVoterReport(filters: VoterReportFilterDto): Promise<{
+  async getVoterReport(
+    filters: VoterReportFilterDto,
+    user?: any,
+  ): Promise<{
     data: VoterReportDto[];
     page: number;
     limit: number;
@@ -669,6 +960,13 @@ export class VoterService {
       .leftJoinAndSelect('cv.candidate', 'candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
       .leftJoinAndSelect('cv.leader', 'leader');
+
+    // If the user is a digitador (roleId = 5), only show voters they created
+    if (user && user.roleId === 5) {
+      query = query.andWhere('voter.createdByUserId = :createdByUserId', {
+        createdByUserId: user.id,
+      });
+    }
 
     // Aplicar filtros
     if (filters.gender) {
@@ -837,7 +1135,7 @@ export class VoterService {
     const paginatedVoters = uniqueVoters.slice(skip, skip + limit);
 
     // Obtener agregaciones
-    const aggregations = await this.getAggregations(filters);
+    const aggregations = await this.getAggregations(filters, user);
 
     return {
       data: paginatedVoters,
@@ -849,9 +1147,19 @@ export class VoterService {
     };
   }
 
-  private async getAggregations(filters: VoterReportFilterDto): Promise<any> {
+  private async getAggregations(
+    filters: VoterReportFilterDto,
+    user?: any,
+  ): Promise<any> {
     // Función helper para aplicar filtros comunes
     const applyFilters = (query: any) => {
+      // If the user is a digitador (roleId = 5), only show voters they created
+      if (user && user.roleId === 5) {
+        query = query.andWhere('voter.createdByUserId = :createdByUserId', {
+          createdByUserId: user.id,
+        });
+      }
+
       if (filters.votingBoothId) {
         const votingBoothId = parseInt(filters.votingBoothId as any);
         if (!isNaN(votingBoothId)) {

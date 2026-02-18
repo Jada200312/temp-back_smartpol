@@ -14,6 +14,7 @@ import { Corporation } from './corporation.entity';
 import { Leader } from './leader.entity';
 import { Voter } from './voter.entity';
 import { User } from './user.entity';
+import { Campaign } from './campaigns.entity';
 
 @Entity('candidates')
 @Index(['name'])
@@ -21,6 +22,8 @@ import { User } from './user.entity';
 @Index(['number'])
 @Index(['corporation_id'])
 @Index(['userId'])
+@Index(['campaignId'])
+@Index(['createdAt'])
 export class Candidate {
   @PrimaryGeneratedColumn()
   id: number;
@@ -47,6 +50,13 @@ export class Candidate {
 
   @Column({ nullable: true })
   userId: number;
+
+  @ManyToOne(() => Campaign, (campaign) => campaign.candidates, { nullable: true })
+  @JoinColumn({ name: 'campaignId' })
+  campaign: Campaign;
+
+  @Column({ nullable: true })
+  campaignId: number;
 
   @ManyToMany(() => Leader, (leader) => leader.candidates, {
     cascade: true,

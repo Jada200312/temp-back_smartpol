@@ -5,9 +5,10 @@ import { Leader } from '../../database/entities/leader.entity';
 import { User } from '../../database/entities/user.entity';
 import { CandidateService } from './candidate.service';
 import { CandidateController } from './candidate.controller';
+import { Campaign } from 'src/database/entities';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Candidate, Leader, User])],
+  imports: [TypeOrmModule.forFeature([Candidate, Leader, User, Campaign])],
   controllers: [CandidateController],
   providers: [CandidateService],
   exports: [CandidateService],

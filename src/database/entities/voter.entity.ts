@@ -15,6 +15,7 @@ import { Leader } from './leader.entity';
 import { Department } from './department.entity';
 import { Municipality } from './municipality.entity';
 import { VotingBooth } from './voting-booth.entity';
+import { User } from './user.entity';
 
 @Entity('voters')
 @Index(['identification'])
@@ -24,6 +25,7 @@ import { VotingBooth } from './voting-booth.entity';
 @Index(['firstName', 'lastName'])
 @Index(['email'])
 @Index(['phone'])
+@Index(['createdByUserId']) // conservar índice
 export class Voter {
   @PrimaryGeneratedColumn()
   id: number;
@@ -90,13 +92,21 @@ export class Voter {
 
   @ManyToMany(() => Candidate, (candidate) => candidate.voters)
   @JoinTable({
-    name: 'candidate_voters',
+    name: 'candidate_voter',
     joinColumn: { name: 'voterId', referencedColumnName: 'id' },
     inverseJoinColumn: { name: 'candidateId', referencedColumnName: 'id' },
   })
   candidates: Candidate[];
 
-  // Virtual property - populated dynamically from CandidateVoter relations
+  // Mantener columna y relación para creador
+  @Column({ nullable: true })
+  createdByUserId: number;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'createdByUserId' })
+  createdByUser: User;
+
+  // Mantener propiedad virtual de líderes
   leaders?: Leader[] | null;
 
   @CreateDateColumn()
