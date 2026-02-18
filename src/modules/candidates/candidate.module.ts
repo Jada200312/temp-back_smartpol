@@ -6,9 +6,13 @@ import { User } from '../../database/entities/user.entity';
 import { CandidateService } from './candidate.service';
 import { CandidateController } from './candidate.controller';
 import { Campaign } from 'src/database/entities';
+import { UserModule } from '../users/user.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Candidate, Leader, User, Campaign])],
+  imports: [
+    TypeOrmModule.forFeature([Candidate, Leader, User, Campaign]),
+    UserModule,
+  ],
   controllers: [CandidateController],
   providers: [CandidateService],
   exports: [CandidateService],

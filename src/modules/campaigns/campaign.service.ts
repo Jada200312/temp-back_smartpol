@@ -101,14 +101,13 @@ export class CampaignsService {
 
       const query = this.campaignsRepository.createQueryBuilder('campaign');
 
-      // ✅ FILTRO OBLIGATORIO: Si el usuario tiene organizationId, solo ve sus campañas
+      // ✅ FILTRO: Solo aplica si el usuario tiene organizationId (admin de organización)
+      // El super admin (sin organizationId) ve TODAS las campañas sin restricción
       if (currentUser.organizationId) {
         query.where('campaign.organizationId = :organizationId', {
           organizationId: currentUser.organizationId,
         });
       }
-      // ✅ Si es super admin SIN organizationId, ve TODAS las campañas
-      // Pero esto NO DEBERÍA PASAR normalmente
 
       // Agregar búsqueda si existe
       if (search && search.trim()) {
@@ -154,7 +153,8 @@ export class CampaignsService {
     try {
       const query = this.campaignsRepository.createQueryBuilder('campaign');
 
-      // ✅ FILTRO OBLIGATORIO: Si el usuario tiene organizationId, solo ve sus campañas
+      // ✅ FILTRO: Solo aplica si el usuario tiene organizationId (admin de organización)
+      // El super admin (sin organizationId) ve TODAS las campañas sin restricción
       if (currentUser.organizationId) {
         query.where('campaign.organizationId = :organizationId', {
           organizationId: currentUser.organizationId,
@@ -195,7 +195,7 @@ export class CampaignsService {
         throw new NotFoundException(`Campaña con ID ${id} no encontrada`);
       }
 
-      // ✅ VALIDACIÓN OBLIGATORIA: Si el usuario tiene organizationId, 
+      // ✅ VALIDACIÓN OBLIGATORIA: Si el usuario tiene organizationId,
       // verifica que la campaña pertenezca a su organización
       if (currentUser && currentUser.organizationId) {
         if (campaign.organizationId !== currentUser.organizationId) {
@@ -289,11 +289,7 @@ export class CampaignsService {
 
       return await this.campaignsRepository.find({
         where: { organizationId },
-        relations: [
-          'organization',
-          'campaignUsers',
-          'campaignUsers.user',
-        ],
+        relations: ['organization', 'campaignUsers', 'campaignUsers.user'],
         order: {
           createdAt: 'DESC',
         },
@@ -320,7 +316,7 @@ export class CampaignsService {
   ) {
     try {
       const { userIds, ...campaignData } = updateCampaignDto;
-      
+
       // ✅ Valida que el usuario tenga acceso a esta campaña
       const campaign = await this.findOneBasic(id, currentUser);
 

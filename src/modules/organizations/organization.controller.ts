@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -70,8 +71,16 @@ export class OrganizationsController {
   })
   @ApiResponse({ status: 401, description: 'No autenticado' })
   @ApiResponse({ status: 403, description: 'No tiene permiso' })
-  findAll() {
-    return this.organizationsService.findAll();
+  findAll(
+    @Query('page') page: string = '1',
+    @Query('limit') limit: string = '10',
+    @Query('search') search?: string,
+  ) {
+    return this.organizationsService.findAll(
+      parseInt(page),
+      parseInt(limit),
+      search,
+    );
   }
 
   @Get(':id')

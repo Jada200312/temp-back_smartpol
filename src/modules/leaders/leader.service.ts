@@ -11,6 +11,7 @@ import { User } from '../../database/entities/user.entity';
 import { Campaign } from '../../database/entities/campaigns.entity';
 import { CreateLeaderDto } from './dto/create-leader.dto';
 import { UpdateLeaderDto } from './dto/update-leader.dto';
+import { UserService } from '../users/user.service';
 
 @Injectable()
 export class LeaderService {
@@ -23,6 +24,7 @@ export class LeaderService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
+    private readonly userService: UserService,
   ) {}
 
   async create(
@@ -193,7 +195,23 @@ export class LeaderService {
     id: number,
     updateLeaderDto: UpdateLeaderDto,
   ): Promise<Leader | null> {
-    await this.leaderRepository.update(id, updateLeaderDto);
+    const leader = await this.leaderRepository.findOne({
+      where: { id },
+      relations: ['user'],
+    });
+
+    if (!leader) {
+      throw new NotFoundException(`Leader with ID ${id} not found`);
+    }
+
+    const { password, ...updateData } = updateLeaderDto;
+
+    // Actualizar el usuario si existe y se proporciona contraseña
+    if (password && leader.userId) {
+      await this.userService.update(leader.userId, { password });
+    }
+
+    await this.leaderRepository.update(id, updateData);
     return await this.findOne(id);
   }
 

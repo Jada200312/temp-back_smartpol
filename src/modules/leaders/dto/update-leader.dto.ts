@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber, MinLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdateLeaderDto {
@@ -44,10 +44,21 @@ export class UpdateLeaderDto {
 
   @ApiProperty({
     example: 1,
-    description: 'Campaign ID that the leader works for (optional). Change the campaign assignment for this leader.',
+    description:
+      'Campaign ID that the leader works for (optional). Change the campaign assignment for this leader.',
     required: false,
   })
   @IsNumber()
   @IsOptional()
   campaignId?: number;
+
+  @ApiProperty({
+    example: 'newpassword123',
+    description: 'Leader user password (optional, minimum 6 characters)',
+    required: false,
+  })
+  @IsString()
+  @MinLength(6)
+  @IsOptional()
+  password?: string;
 }

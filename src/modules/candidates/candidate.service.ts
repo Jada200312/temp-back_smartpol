@@ -12,6 +12,7 @@ import { User } from '../../database/entities/user.entity';
 import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { Campaign } from 'src/database/entities';
+import { UserService } from '../users/user.service';
 
 @Injectable()
 export class CandidateService {
@@ -24,6 +25,7 @@ export class CandidateService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
+    private readonly userService: UserService,
   ) {}
 
   async create(
@@ -107,7 +109,7 @@ export class CandidateService {
     page: number = 1,
     limit: number = 10,
     search?: string,
-    user?: any,
+    organizationId?: number,
   ): Promise<{
     data: Candidate[];
     total: number;
@@ -122,10 +124,10 @@ export class CandidateService {
       .leftJoinAndSelect('candidate.campaign', 'campaign')
       .leftJoinAndSelect('candidate.user', 'user');
 
-    // If user is campaign admin (roleId=2), filter by their organization
-    if (user && user.roleId === 2 && user.organizationId) {
+    // Filter by organization through campaign
+    if (organizationId) {
       query.andWhere('campaign.organizationId = :organizationId', {
-        organizationId: user.organizationId,
+        organizationId,
       });
     }
 
@@ -190,7 +192,7 @@ export class CandidateService {
       throw new NotFoundException(`Candidate with ID ${id} not found`);
     }
 
-    const { campaignId, ...updateData } = updateCandidateDto;
+    const { campaignId, password, ...updateData } = updateCandidateDto;
 
     // Validar cambio de campaña si se proporciona
     if (campaignId && candidate.user) {
@@ -210,6 +212,11 @@ export class CandidateService {
           `Campaign ${campaignId} does not belong to candidate's organization`,
         );
       }
+    }
+
+    // Actualizar el usuario si existe y se proporciona contraseña
+    if (password && candidate.userId) {
+      await this.userService.update(candidate.userId, { password });
     }
 
     await this.candidateRepository.update(id, {
@@ -294,6 +301,78 @@ export class CandidateService {
     }
 
     return candidate.leaders;
+  }
+
+  /**
+   * Obtener conteo de votantes por candidato de una organización
+   */
+  async getVoterCountByCandidate(organizationId?: number): Promise<
+    Array<{
+      candidateId: number;
+      candidateName: string;
+      voterCount: number;
+    }>
+  > {
+    const query = this.candidateRepository
+      .createQueryBuilder('candidate')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
+      .leftJoin('candidate_voter', 'cv', 'cv.candidate_id = candidate.id')
+      .select('candidate.id', 'candidateId')
+      .addSelect('candidate.name', 'candidateName')
+      .addSelect('COUNT(DISTINCT cv.voter_id)', 'voterCount')
+      .groupBy('candidate.id')
+      .addGroupBy('candidate.name')
+      .orderBy('COUNT(DISTINCT cv.voter_id)', 'DESC');
+
+    // Filtrar por organización si se proporciona
+    if (organizationId) {
+      query.where('campaign.organizationId = :organizationId', {
+        organizationId,
+      });
+    }
+
+    const results = await query.getRawMany();
+
+    return results.map((row) => ({
+      candidateId: parseInt(row.candidateId),
+      candidateName: row.candidateName,
+      voterCount: parseInt(row.voterCount),
+    }));
+  }
+
+  /**
+   * Obtener conteo de votantes por partido de una organización
+   */
+  async getVoterCountByParty(organizationId?: number): Promise<
+    Array<{
+      party: string;
+      voterCount: number;
+    }>
+  > {
+    const query = this.candidateRepository
+      .createQueryBuilder('candidate')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
+      .leftJoin('candidate_voter', 'cv', 'cv.candidate_id = candidate.id')
+      .select('candidate.party', 'party')
+      .addSelect('COUNT(DISTINCT cv.voter_id)', 'voterCount')
+      .groupBy('candidate.party')
+      .orderBy('COUNT(DISTINCT cv.voter_id)', 'DESC');
+
+    // Filtrar por organización si se proporciona
+    if (organizationId) {
+      query.where('campaign.organizationId = :organizationId', {
+        organizationId,
+      });
+    }
+
+    const results = await query.getRawMany();
+
+    return results
+      .filter((row) => row.party) // Excluir registros sin partido
+      .map((row) => ({
+        party: row.party,
+        voterCount: parseInt(row.voterCount),
+      }));
   }
 
   async findByLeaderAndCorporation(
