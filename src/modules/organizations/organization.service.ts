@@ -1,8 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { Organization } from '../../database/entities/organizations.entity';
 import { User } from '../../database/entities/user.entity';
+import { Campaign } from '../../database/entities/campaigns.entity';
+import { Candidate } from '../../database/entities/candidate.entity';
+import { Leader } from '../../database/entities/leader.entity';
+import { CampaignUser } from '../../database/entities/campaign-user.entity';
+import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateOrganizationWithAdminDto } from './dto/create-organization-with-admin.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
@@ -14,10 +23,22 @@ export class OrganizationsService {
     private organizationsRepository: Repository<Organization>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Campaign)
+    private campaignRepository: Repository<Campaign>,
+    @InjectRepository(Candidate)
+    private candidateRepository: Repository<Candidate>,
+    @InjectRepository(Leader)
+    private leaderRepository: Repository<Leader>,
+    @InjectRepository(CampaignUser)
+    private campaignUserRepository: Repository<CampaignUser>,
+    @InjectRepository(CandidateVoter)
+    private candidateVoterRepository: Repository<CandidateVoter>,
   ) {}
 
   async create(createOrganizationDto: CreateOrganizationDto) {
-    const organization = this.organizationsRepository.create(createOrganizationDto);
+    const organization = this.organizationsRepository.create(
+      createOrganizationDto,
+    );
     return await this.organizationsRepository.save(organization);
   }
 
@@ -37,7 +58,9 @@ export class OrganizationsService {
     console.log('Usuario existente:', existingUser); // DEBUG
 
     if (existingUser) {
-      throw new BadRequestException('El email del administrador ya está registrado');
+      throw new BadRequestException(
+        'El email del administrador ya está registrado',
+      );
     }
 
     // Crear la organización
@@ -45,7 +68,8 @@ export class OrganizationsService {
       name,
       description,
     });
-    const savedOrganization = await this.organizationsRepository.save(organization);
+    const savedOrganization =
+      await this.organizationsRepository.save(organization);
 
     console.log('Organización creada:', savedOrganization.id); // DEBUG
 
@@ -83,12 +107,9 @@ export class OrganizationsService {
     }
   }
 
-  async findAll(
-    page: number = 1,
-    limit: number = 10,
-    search?: string,
-  ) {
-    const query = this.organizationsRepository.createQueryBuilder('organization');
+  async findAll(page: number = 1, limit: number = 10, search?: string) {
+    const query =
+      this.organizationsRepository.createQueryBuilder('organization');
 
     if (search) {
       query.where(
@@ -135,6 +156,79 @@ export class OrganizationsService {
 
   async remove(id: number) {
     const organization = await this.findOne(id);
-    return await this.organizationsRepository.remove(organization);
+
+    try {
+      // 1. Obtener todos los candidatos de las campañas de la organización
+      const candidates = await this.candidateRepository.find({
+        relations: ['campaign'],
+        where: {
+          campaign: {
+            organizationId: id,
+          },
+        },
+      });
+
+      // 2. Eliminar todas las relaciones candidato-votante de estos candidatos
+      if (candidates.length > 0) {
+        const candidateIds = candidates.map((c) => c.id);
+        await this.candidateVoterRepository.delete({
+          candidateId: In(candidateIds),
+        });
+      }
+
+      // 3. Obtener todos los líderes de las campañas de la organización
+      const leaders = await this.leaderRepository.find({
+        relations: ['campaign'],
+        where: {
+          campaign: {
+            organizationId: id,
+          },
+        },
+      });
+
+      // 4. Obtener todas las campañas de la organización
+      const campaigns = await this.campaignRepository.find({
+        where: { organizationId: id },
+      });
+
+      // 5. Eliminar todas las relaciones campaña-usuario
+      if (campaigns.length > 0) {
+        const campaignIds = campaigns.map((c) => c.id);
+        await this.campaignUserRepository.delete({
+          campaign: { id: In(campaignIds) },
+        });
+      }
+
+      // 6. Eliminar todos los candidatos
+      if (candidates.length > 0) {
+        await this.candidateRepository.remove(candidates);
+      }
+
+      // 7. Eliminar todos los líderes
+      if (leaders.length > 0) {
+        await this.leaderRepository.remove(leaders);
+      }
+
+      // 8. Eliminar todas las campañas
+      if (campaigns.length > 0) {
+        await this.campaignRepository.remove(campaigns);
+      }
+
+      // 9. Eliminar todos los usuarios de la organización
+      const users = await this.usersRepository.find({
+        where: { organizationId: id },
+      });
+
+      if (users.length > 0) {
+        await this.usersRepository.remove(users);
+      }
+
+      // 10. Finalmente, eliminar la organización
+      return await this.organizationsRepository.remove(organization);
+    } catch (error) {
+      throw new BadRequestException(
+        `Error al eliminar la organización: ${error.message}`,
+      );
+    }
   }
 }

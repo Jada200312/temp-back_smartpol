@@ -32,7 +32,7 @@ export class LeaderController {
   constructor(private readonly leaderService: LeaderService) {}
 
   @Post()
-  @Permission('leaders:manage')
+  @Permission(['leaders:create', 'leaders:manage'])
   @ApiOperation({
     summary: 'Create a new leader',
     description:
@@ -477,7 +477,7 @@ export class LeaderController {
   }
 
   @Patch(':id')
-  @Permission('leaders:manage')
+  @Permission(['leaders:update', 'leaders:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -560,7 +560,7 @@ export class LeaderController {
   }
 
   @Delete(':id')
-  @Permission('leaders:manage')
+  @Permission(['leaders:delete', 'leaders:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -593,7 +593,7 @@ export class LeaderController {
   }
 
   @Post(':id/assign-candidates')
-  @Permission('leaders:manage')
+  @Permission(['leaders:create', 'leaders:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -641,7 +641,7 @@ export class LeaderController {
   }
 
   @Post(':id/add-candidates')
-  @Permission('leaders:manage')
+  @Permission(['leaders:create', 'leaders:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -684,7 +684,7 @@ export class LeaderController {
   }
 
   @Post(':id/remove-candidates')
-  @Permission('leaders:manage')
+  @Permission(['leaders:delete', 'leaders:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',

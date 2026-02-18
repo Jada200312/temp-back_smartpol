@@ -35,7 +35,7 @@ export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
   @Post()
-  @Permission('campaigns:manage')
+  @Permission(['campaigns:create', 'campaigns:manage'])
   @ApiOperation({
     summary: 'Create a new campaign',
     description:
@@ -404,7 +404,7 @@ export class CampaignsController {
   }
 
   @Patch(':id')
-  @Permission('campaigns:manage')
+  @Permission(['campaigns:update', 'campaigns:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -479,7 +479,7 @@ export class CampaignsController {
   }
 
   @Delete(':id')
-  @Permission('campaigns:manage')
+  @Permission(['campaigns:delete', 'campaigns:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',

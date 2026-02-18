@@ -25,7 +25,6 @@ import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { Candidate } from '../../database/entities/candidate.entity';
 import { Permission } from '../../permissions/permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Candidates')
 @Controller('candidates')
@@ -35,7 +34,7 @@ export class CandidateController {
   constructor(private readonly candidateService: CandidateService) {}
 
   @Post()
-  @Permission('candidates:manage')
+  @Permission(['candidates:create', 'candidates:manage'])
   @ApiOperation({
     summary: 'Create a new candidate',
     description: 'Register a new political candidate in the system',
@@ -89,6 +88,66 @@ export class CandidateController {
     return await this.candidateService.create(createCandidateDto, authUserId);
   }
 
+  @Get('votes/by-candidate')
+  @Permission('candidates:read')
+  @ApiOperation({
+    summary: 'Get voter count by candidate',
+    description:
+      "Returns the count of voters assigned to each candidate of the authenticated user's organization",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Voter count by candidate retrieved successfully',
+    schema: {
+      example: [
+        {
+          candidateId: 1,
+          candidateName: 'Juan Pérez',
+          voterCount: 150,
+        },
+        {
+          candidateId: 2,
+          candidateName: 'María García',
+          voterCount: 120,
+        },
+      ],
+    },
+  })
+  async getVoterCountByCandidate(@Request() req: any) {
+    return await this.candidateService.getVoterCountByCandidate(
+      req.user?.organizationId,
+    );
+  }
+
+  @Get('votes/by-party')
+  @Permission('candidates:read')
+  @ApiOperation({
+    summary: 'Get voter count by party',
+    description:
+      "Returns the count of voters assigned to each party of the authenticated user's organization",
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Voter count by party retrieved successfully',
+    schema: {
+      example: [
+        {
+          party: 'Partido Liberal Colombiano',
+          voterCount: 150,
+        },
+        {
+          party: 'Partido Conservador',
+          voterCount: 120,
+        },
+      ],
+    },
+  })
+  async getVoterCountByParty(@Request() req: any) {
+    return await this.candidateService.getVoterCountByParty(
+      req.user?.organizationId,
+    );
+  }
+
   @Get()
   @Permission('candidates:read')
   @ApiOperation({
@@ -121,19 +180,20 @@ export class CandidateController {
     description: 'List of candidates retrieved successfully',
   })
   async findAll(
+    @Request() req: any,
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('search') search?: string,
-    @CurrentUser() user?: any,
   ) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
 
+    // ✅ PASAR organizationId del usuario autenticado al servicio
     return await this.candidateService.findAllWithPagination(
       pageNum,
       limitNum,
       search,
-      user,
+      req.user?.organizationId,
     );
   }
 
@@ -198,7 +258,7 @@ export class CandidateController {
   }
 
   @Patch(':id')
-  @Permission('candidates:manage')
+  @Permission(['candidates:update', 'candidates:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -217,7 +277,7 @@ export class CandidateController {
   }
 
   @Delete(':id')
-  @Permission('candidates:manage')
+  @Permission(['candidates:delete', 'candidates:manage'])
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -233,7 +293,7 @@ export class CandidateController {
   }
 
   @Post(':candidateId/leaders/:leaderId')
-  @Permission('candidates:manage')
+  @Permission(['candidates:create', 'candidates:manage'])
   @ApiParam({
     name: 'candidateId',
     type: 'number',
@@ -261,7 +321,7 @@ export class CandidateController {
   }
 
   @Delete(':candidateId/leaders/:leaderId')
-  @Permission('candidates:manage')
+  @Permission(['candidates:delete', 'candidates:manage'])
   @ApiParam({
     name: 'candidateId',
     type: 'number',
