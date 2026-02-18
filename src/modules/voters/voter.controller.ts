@@ -209,17 +209,6 @@ export class VoterController {
     status: 200,
     description: 'List of voters with assignments retrieved successfully',
   })
-  async findAllWithAssignments(
-    @Query('roleId') roleId?: string,
-    @Query('candidateId') candidateId?: string,
-    @Query('leaderId') leaderId?: string,
-  ): Promise<Voter[]> {
-    return await this.voterService.findAllWithAssignmentsByRole(
-      roleId ? parseInt(roleId) : undefined,
-      candidateId ? parseInt(candidateId) : undefined,
-      leaderId ? parseInt(leaderId) : undefined,
-    );
-  }
 
   @Get('by-candidate/:candidateId')
   @Permission('voters:read')
