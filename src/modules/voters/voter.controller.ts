@@ -179,37 +179,6 @@ export class VoterController {
     );
   }
 
-  @Get('search/all-with-assignments')
-  @Permission('voters:read')
-  @ApiOperation({
-    summary:
-      'Get all voters with assigned candidates/leaders (optimized for search)',
-    description:
-      'Returns all voters with their assigned candidates and leaders in a single request. Filtered by role if needed.',
-  })
-  @ApiQuery({
-    name: 'roleId',
-    type: Number,
-    required: false,
-    description: 'User role ID (3=candidate, 4=leader)',
-  })
-  @ApiQuery({
-    name: 'candidateId',
-    type: Number,
-    required: false,
-    description: 'Candidate ID (required if roleId=3)',
-  })
-  @ApiQuery({
-    name: 'leaderId',
-    type: Number,
-    required: false,
-    description: 'Leader ID (required if roleId=4)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'List of voters with assignments retrieved successfully',
-  })
-
   @Get('by-candidate/:candidateId')
   @Permission('voters:read')
   @ApiParam({
