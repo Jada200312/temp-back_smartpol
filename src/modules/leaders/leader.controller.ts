@@ -32,11 +32,11 @@ export class LeaderController {
   constructor(private readonly leaderService: LeaderService) {}
 
   @Post()
-  @Permission('leaders:create')
+  @Permission('leaders:manage')
   @ApiOperation({
     summary: 'Create a new leader',
     description:
-      'Register a new political leader in the system with optional campaign assignment. The leader will be associated with the authenticated user\'s organization through the User entity.',
+      "Register a new political leader in the system with optional campaign assignment. The leader will be associated with the authenticated user's organization through the User entity.",
   })
   @ApiBody({
     type: CreateLeaderDto,
@@ -289,9 +289,7 @@ export class LeaderController {
     status: 404,
     description: 'Leader not found for the given user ID',
   })
-  async findByUserId(
-    @Param('userId') userId: string,
-  ): Promise<Leader | null> {
+  async findByUserId(@Param('userId') userId: string): Promise<Leader | null> {
     return await this.leaderService.findByUserId(+userId);
   }
 
@@ -300,7 +298,7 @@ export class LeaderController {
   @ApiOperation({
     summary: 'Get all leaders',
     description:
-      'Returns a paginated list of leaders filtered by the authenticated user\'s organization.',
+      "Returns a paginated list of leaders filtered by the authenticated user's organization.",
   })
   @ApiQuery({
     name: 'page',
@@ -479,7 +477,7 @@ export class LeaderController {
   }
 
   @Patch(':id')
-  @Permission('leaders:update')
+  @Permission('leaders:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -488,7 +486,8 @@ export class LeaderController {
   })
   @ApiOperation({
     summary: 'Update a leader',
-    description: 'Update leader information (name, document, municipality, phone, campaign)',
+    description:
+      'Update leader information (name, document, municipality, phone, campaign)',
   })
   @ApiBody({
     type: UpdateLeaderDto,
@@ -561,7 +560,7 @@ export class LeaderController {
   }
 
   @Delete(':id')
-  @Permission('leaders:delete')
+  @Permission('leaders:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -594,7 +593,7 @@ export class LeaderController {
   }
 
   @Post(':id/assign-candidates')
-  @Permission('leaders:update')
+  @Permission('leaders:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -642,7 +641,7 @@ export class LeaderController {
   }
 
   @Post(':id/add-candidates')
-  @Permission('leaders:update')
+  @Permission('leaders:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -685,7 +684,7 @@ export class LeaderController {
   }
 
   @Post(':id/remove-candidates')
-  @Permission('leaders:update')
+  @Permission('leaders:manage')
   @ApiParam({
     name: 'id',
     type: 'number',

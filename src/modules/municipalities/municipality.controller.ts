@@ -26,7 +26,7 @@ export class MunicipalityController {
   constructor(private readonly municipalityService: MunicipalityService) {}
 
   @Post()
-  @Permission('municipalities:create')
+  @Permission('municipalities:manage')
   @ApiOperation({
     summary: 'Create a new municipality',
     description: 'Register a new municipality in the system',
@@ -157,7 +157,7 @@ export class MunicipalityController {
   }
 
   @Patch(':id')
-  @Permission('municipalities:update')
+  @Permission('municipalities:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -202,7 +202,7 @@ export class MunicipalityController {
   }
 
   @Delete(':id')
-  @Permission('municipalities:delete')
+  @Permission('municipalities:manage')
   @ApiParam({
     name: 'id',
     type: 'number',

@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Candidate } from '../../database/entities/candidate.entity';
@@ -21,7 +26,10 @@ export class CandidateService {
     private readonly campaignRepository: Repository<Campaign>,
   ) {}
 
-  async create(createCandidateDto: CreateCandidateDto, authUserId: number): Promise<Candidate> {
+  async create(
+    createCandidateDto: CreateCandidateDto,
+    authUserId: number,
+  ): Promise<Candidate> {
     const { userId, campaignId, ...candidateData } = createCandidateDto;
 
     // 1. Obtener el usuario autenticado y su organizationId
@@ -34,7 +42,9 @@ export class CandidateService {
     }
 
     if (!authUser.organizationId) {
-      throw new ForbiddenException('Authenticated user does not belong to any organization');
+      throw new ForbiddenException(
+        'Authenticated user does not belong to any organization',
+      );
     }
 
     // 2. Validar que el usuario candidato existe
@@ -79,7 +89,7 @@ export class CandidateService {
 
     // Retornar el candidato encontrado, garantizando que existe
     const foundCandidate = await this.findOne(savedCandidate.id);
-    
+
     if (!foundCandidate) {
       throw new BadRequestException('Failed to retrieve the created candidate');
     }
@@ -88,8 +98,8 @@ export class CandidateService {
   }
 
   async findAll(): Promise<Candidate[]> {
-    return await this.candidateRepository.find({ 
-      relations: ['corporation', 'campaign', 'user'] 
+    return await this.candidateRepository.find({
+      relations: ['corporation', 'campaign', 'user'],
     });
   }
 
@@ -97,6 +107,7 @@ export class CandidateService {
     page: number = 1,
     limit: number = 10,
     search?: string,
+    user?: any,
   ): Promise<{
     data: Candidate[];
     total: number;
@@ -111,14 +122,21 @@ export class CandidateService {
       .leftJoinAndSelect('candidate.campaign', 'campaign')
       .leftJoinAndSelect('candidate.user', 'user');
 
+    // If user is campaign admin (roleId=2), filter by their organization
+    if (user && user.roleId === 2 && user.organizationId) {
+      query.andWhere('campaign.organizationId = :organizationId', {
+        organizationId: user.organizationId,
+      });
+    }
+
     if (search && search.trim()) {
       const searchCondition = `(
         LOWER(candidate.name) LIKE LOWER(:search)
         OR LOWER(candidate.party) LIKE LOWER(:search)
         OR CAST(candidate.number AS CHAR) LIKE :searchNumber
       )`;
-      
-      query.where(searchCondition, {
+
+      query.andWhere(searchCondition, {
         search: `%${search}%`,
         searchNumber: `%${search}%`,
       });

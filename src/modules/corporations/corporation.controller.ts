@@ -26,7 +26,7 @@ export class CorporationController {
   constructor(private readonly corporationService: CorporationService) {}
 
   @Post()
-  @Permission('corporations:create')
+  @Permission('corporations:manage')
   @ApiOperation({
     summary: 'Create a new corporation',
     description: 'Register a new corporation in the system',
@@ -114,7 +114,7 @@ export class CorporationController {
   }
 
   @Patch(':id')
-  @Permission('corporations:update')
+  @Permission('corporations:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -157,7 +157,7 @@ export class CorporationController {
   }
 
   @Delete(':id')
-  @Permission('corporations:delete')
+  @Permission('corporations:manage')
   @ApiParam({
     name: 'id',
     type: 'number',

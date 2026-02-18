@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Leader } from '../../database/entities/leader.entity';
@@ -27,7 +31,7 @@ export class LeaderService {
   ): Promise<Leader> {
     // ✅ NO necesitamos organizationId en el DTO
     // El organizationId viene del User a través del userId
-    
+
     const leader = this.leaderRepository.create(createLeaderDto);
     const savedLeader = await this.leaderRepository.save(leader);
 
@@ -79,9 +83,11 @@ export class LeaderService {
       .leftJoinAndSelect('leader.campaign', 'campaign')
       .leftJoinAndSelect('leader.user', 'user');
 
-    // ✅ FILTRAR por organizationId a través de USER
+    // Filter by organization through campaign
     if (organizationId) {
-      query.andWhere('user.organizationId = :organizationId', { organizationId });
+      query.andWhere('campaign.organizationId = :organizationId', {
+        organizationId,
+      });
     }
 
     if (search && search.trim()) {

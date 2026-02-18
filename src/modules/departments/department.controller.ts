@@ -26,7 +26,7 @@ export class DepartmentController {
   constructor(private readonly departmentService: DepartmentService) {}
 
   @Post()
-  @Permission('departments:create')
+  @Permission('departments:manage')
   @ApiOperation({
     summary: 'Create a new department',
     description: 'Register a new department in the system',
@@ -139,7 +139,7 @@ export class DepartmentController {
   }
 
   @Patch(':id')
-  @Permission('departments:update')
+  @Permission('departments:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -184,7 +184,7 @@ export class DepartmentController {
   }
 
   @Delete(':id')
-  @Permission('departments:delete')
+  @Permission('departments:manage')
   @ApiParam({
     name: 'id',
     type: 'number',

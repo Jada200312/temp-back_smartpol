@@ -25,6 +25,7 @@ import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { Candidate } from '../../database/entities/candidate.entity';
 import { Permission } from '../../permissions/permission.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 @ApiTags('Candidates')
 @Controller('candidates')
@@ -34,7 +35,7 @@ export class CandidateController {
   constructor(private readonly candidateService: CandidateService) {}
 
   @Post()
-  @Permission('candidates:create')
+  @Permission('candidates:manage')
   @ApiOperation({
     summary: 'Create a new candidate',
     description: 'Register a new political candidate in the system',
@@ -123,6 +124,7 @@ export class CandidateController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('search') search?: string,
+    @CurrentUser() user?: any,
   ) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
@@ -131,6 +133,7 @@ export class CandidateController {
       pageNum,
       limitNum,
       search,
+      user,
     );
   }
 
@@ -195,7 +198,7 @@ export class CandidateController {
   }
 
   @Patch(':id')
-  @Permission('candidates:update')
+  @Permission('candidates:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -214,7 +217,7 @@ export class CandidateController {
   }
 
   @Delete(':id')
-  @Permission('candidates:delete')
+  @Permission('candidates:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -230,7 +233,7 @@ export class CandidateController {
   }
 
   @Post(':candidateId/leaders/:leaderId')
-  @Permission('candidates:update')
+  @Permission('candidates:manage')
   @ApiParam({
     name: 'candidateId',
     type: 'number',
@@ -258,7 +261,7 @@ export class CandidateController {
   }
 
   @Delete(':candidateId/leaders/:leaderId')
-  @Permission('candidates:update')
+  @Permission('candidates:manage')
   @ApiParam({
     name: 'candidateId',
     type: 'number',

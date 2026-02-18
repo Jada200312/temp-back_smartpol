@@ -29,6 +29,9 @@ export class PermissionsService {
   /**
    * Verifica si un usuario tiene un permiso específico
    * Lógica: permisos personalizados > permisos del rol
+   *
+   * IMPORTANTE: Los permisos "manage" incluyen automáticamente create, update, delete
+   * Ej: Si tienes 'candidates:manage', también tienes 'candidates:create', 'candidates:update', 'candidates:delete'
    */
   async hasPermission(
     userId: number,
@@ -60,10 +63,24 @@ export class PermissionsService {
     }
 
     // 2. Si no existe permiso específico, usar permiso del rol
-    const rolePermission = await this.rolePermissionsRepo.findOne({
+    let rolePermission = await this.rolePermissionsRepo.findOne({
       where: { role: { id: roleId }, permission: { name: permissionName } },
       relations: ['permission'],
     });
+
+    // 3. Si el permiso solicitado es create/update/delete, verificar también si tiene 'manage'
+    if (!rolePermission && this.isActionPermission(permissionName)) {
+      const [resource, action] = permissionName.split(':');
+      const managePermissionName = `${resource}:manage`;
+
+      rolePermission = await this.rolePermissionsRepo.findOne({
+        where: {
+          role: { id: roleId },
+          permission: { name: managePermissionName },
+        },
+        relations: ['permission'],
+      });
+    }
 
     const hasAccess = !!rolePermission;
     this.permissionCache.set(cacheKey, hasAccess);
@@ -71,7 +88,17 @@ export class PermissionsService {
   }
 
   /**
+   * Verifica si el permiso solicitado es de acción (create, update, delete)
+   * Estos permisos pueden ser satisfechos por el permiso 'manage'
+   */
+  private isActionPermission(permissionName: string): boolean {
+    const action = permissionName.split(':')[1];
+    return ['create', 'update', 'delete'].includes(action);
+  }
+
+  /**
    * Obtiene todos los permisos de un usuario (rol + personalizados)
+   * Nota: Expande automáticamente los permisos 'manage' a 'create', 'update', 'delete'
    */
   async getUserPermissions(userId: number, roleId: number): Promise<string[]> {
     // Permisos del rol
@@ -97,7 +124,18 @@ export class PermissionsService {
       }
     });
 
-    return Array.from(permissionNames);
+    // Expandir permisos 'manage' a create/update/delete
+    const expandedPermissions = new Set(permissionNames);
+    permissionNames.forEach((perm) => {
+      if (perm.endsWith(':manage')) {
+        const resource = perm.split(':')[0];
+        expandedPermissions.add(`${resource}:create`);
+        expandedPermissions.add(`${resource}:update`);
+        expandedPermissions.add(`${resource}:delete`);
+      }
+    });
+
+    return Array.from(expandedPermissions);
   }
 
   /**
@@ -196,7 +234,10 @@ export class PermissionsService {
       );
     }
 
+    // Invalidar caché tanto del permiso específico como todo el caché del usuario
     this.invalidateCache(userId, permissionName);
+    // Limpiar caché general para asegurar que se obtienen datos frescos
+    this.clearCache();
   }
 
   /**
@@ -221,6 +262,8 @@ export class PermissionsService {
     });
 
     this.invalidateCache(userId, permissionName);
+    // Limpiar caché general para asegurar que se obtienen datos frescos
+    this.clearCache();
   }
 
   /**

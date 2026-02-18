@@ -69,7 +69,7 @@ export class PermissionsController {
   }
 
   @Post('roles/:roleId/permissions/:permissionId')
-  @Permission('permissions:manage')
+  @Permission('permissions:update')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Assign a permission to a role' })
@@ -85,7 +85,7 @@ export class PermissionsController {
   }
 
   @Delete('roles/:roleId/permissions/:permissionId')
-  @Permission('permissions:manage')
+  @Permission('permissions:update')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Revoke a permission from a role' })
@@ -101,7 +101,7 @@ export class PermissionsController {
   }
 
   @Post('users/:userId/permissions/:permissionId')
-  @Permission('permissions:manage')
+  @Permission('permissions:update')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({
@@ -110,7 +110,7 @@ export class PermissionsController {
   async setUserPermission(
     @Param('userId') userId: string,
     @Param('permissionId') permissionId: string,
-    @Body() body: { granted?: boolean },
+    @Body('granted') granted?: boolean,
   ) {
     const permission = await this.permissionsService.getPermissionById(
       parseInt(permissionId),
@@ -118,19 +118,20 @@ export class PermissionsController {
     if (!permission) {
       throw new Error('Permission not found');
     }
-    const granted = body?.granted !== false; // Por defecto true
+    // Si no se proporciona granted, asumir true
+    const grantedValue = granted !== undefined ? granted : true;
     await this.permissionsService.setUserPermission(
       parseInt(userId),
       permission.name,
-      granted,
+      grantedValue,
     );
     return {
-      message: `Permission ${granted ? 'granted' : 'revoked'} successfully`,
+      message: `Permission ${grantedValue ? 'granted' : 'revoked'} successfully`,
     };
   }
 
   @Delete('users/:userId/permissions/:permissionId')
-  @Permission('permissions:manage')
+  @Permission('permissions:update')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete a custom permission from a user' })

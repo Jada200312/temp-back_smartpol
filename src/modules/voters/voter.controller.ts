@@ -19,6 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { VoterService } from './voter.service';
 import { Permission } from '../../permissions/permission.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateVoterDto } from './dto/create-voter.dto';
 import { UpdateVoterDto } from './dto/update-voter.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
@@ -95,15 +96,19 @@ export class VoterController {
       },
     },
   })
-  async create(@Body() createVoterDto: CreateVoterDto): Promise<Voter> {
-    return await this.voterService.create(createVoterDto);
+  async create(
+    @Body() createVoterDto: CreateVoterDto,
+    @CurrentUser() user: any,
+  ): Promise<Voter> {
+    return await this.voterService.create(createVoterDto, user.id);
   }
 
   @Get()
   @Permission('voters:read')
   @ApiOperation({
     summary: 'Get all voters with pagination',
-    description: 'Returns a paginated list of registered voters',
+    description:
+      'Returns a paginated list of registered voters. Digitadores (roleId=5) will only see voters they created.',
   })
   @ApiQuery({
     name: 'page',
@@ -125,8 +130,9 @@ export class VoterController {
   })
   async findAll(
     @Query() paginationQueryDto: PaginationQueryDto,
+    @CurrentUser() user: any,
   ): Promise<PaginatedResponseDto<Voter>> {
-    return await this.voterService.findAllPaginated(paginationQueryDto);
+    return await this.voterService.findAllPaginated(paginationQueryDto, user);
   }
 
   @Get('search/all-with-assignments')
@@ -135,7 +141,7 @@ export class VoterController {
     summary:
       'Get all voters with assigned candidates/leaders (optimized for search)',
     description:
-      'Returns all voters with their assigned candidates and leaders in a single request. Filtered by role if needed.',
+      'Returns all voters with their assigned candidates and leaders in a single request. Filtered by role if needed. Digitadores (roleId=5) will only see voters they created.',
   })
   @ApiQuery({
     name: 'roleId',
@@ -163,11 +169,13 @@ export class VoterController {
     @Query('roleId') roleId?: string,
     @Query('candidateId') candidateId?: string,
     @Query('leaderId') leaderId?: string,
+    @CurrentUser() user?: any,
   ): Promise<Voter[]> {
     return await this.voterService.findAllWithAssignmentsByRole(
       roleId ? parseInt(roleId) : undefined,
       candidateId ? parseInt(candidateId) : undefined,
       leaderId ? parseInt(leaderId) : undefined,
+      user,
     );
   }
 
@@ -205,10 +213,12 @@ export class VoterController {
   async findByCandidate(
     @Param('candidateId') candidateId: string,
     @Query() paginationQueryDto: PaginationQueryDto,
+    @CurrentUser() user: any,
   ): Promise<PaginatedResponseDto<Voter>> {
     return await this.voterService.findByCandidatePaginated(
       +candidateId,
       paginationQueryDto,
+      user,
     );
   }
 
@@ -246,10 +256,12 @@ export class VoterController {
   async findByLeader(
     @Param('leaderId') leaderId: string,
     @Query() paginationQueryDto: PaginationQueryDto,
+    @CurrentUser() user: any,
   ): Promise<PaginatedResponseDto<Voter>> {
     return await this.voterService.findByLeaderPaginated(
       +leaderId,
       paginationQueryDto,
+      user,
     );
   }
 
@@ -351,7 +363,7 @@ export class VoterController {
   }
 
   @Post(':voterId/assign-candidate')
-  @Permission('voters:create')
+  @Permission(['voters:create', 'voters:manage'])
   @ApiParam({
     name: 'voterId',
     type: 'number',
@@ -486,7 +498,7 @@ export class VoterController {
   }
 
   @Patch(':voterId/assign-candidate')
-  @Permission('voters:update')
+  @Permission(['voters:create', 'voters:update'])
   @ApiParam({
     name: 'voterId',
     type: 'number',
@@ -577,7 +589,7 @@ export class VoterController {
   @ApiOperation({
     summary: 'Get voter report with filters and aggregations',
     description:
-      'Get a detailed report of voters with dynamic filters and aggregations. Pagination is based on unique voters (20 per page by default)',
+      'Get a detailed report of voters with dynamic filters and aggregations. Pagination is based on unique voters (20 per page by default). Digitadores (roleId=5) will only see voters they created.',
   })
   @ApiQuery({
     name: 'gender',
@@ -643,7 +655,10 @@ export class VoterController {
     status: 200,
     description: 'Voter report retrieved successfully',
   })
-  async getVoterReport(@Query() filters: VoterReportFilterDto): Promise<any> {
-    return await this.voterService.getVoterReport(filters);
+  async getVoterReport(
+    @Query() filters: VoterReportFilterDto,
+    @CurrentUser() user?: any,
+  ): Promise<any> {
+    return await this.voterService.getVoterReport(filters, user);
   }
 }

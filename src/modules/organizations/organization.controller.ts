@@ -7,7 +7,12 @@ import {
   Param,
   Delete,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { OrganizationsService } from './organization.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateOrganizationWithAdminDto } from './dto/create-organization-with-admin.dto';
@@ -105,7 +110,10 @@ export class OrganizationsController {
   @Delete(':id')
   @Permission('organizations:delete')
   @ApiOperation({ summary: 'Eliminar una organización' })
-  @ApiResponse({ status: 200, description: 'Organización eliminada exitosamente' })
+  @ApiResponse({
+    status: 200,
+    description: 'Organización eliminada exitosamente',
+  })
   @ApiResponse({ status: 401, description: 'No autenticado' })
   @ApiResponse({ status: 403, description: 'No tiene permiso' })
   @ApiResponse({ status: 404, description: 'Organización no encontrada' })

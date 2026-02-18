@@ -35,7 +35,7 @@ export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 
   @Post()
-  @Permission('campaigns:create')
+  @Permission('campaigns:manage')
   @ApiOperation({
     summary: 'Create a new campaign',
     description:
@@ -314,10 +314,7 @@ export class CampaignsController {
   })
   @ApiResponse({ status: 403, description: 'Not authorized' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
-  async getLeaders(
-    @Param('id') id: string,
-    @CurrentUser() currentUser: User,
-  ) {
+  async getLeaders(@Param('id') id: string, @CurrentUser() currentUser: User) {
     const campaign = await this.campaignsService.findOne(+id, currentUser);
     return campaign.leaders || [];
   }
@@ -402,15 +399,12 @@ export class CampaignsController {
   })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
-  async findOne(
-    @Param('id') id: string,
-    @CurrentUser() currentUser: User,
-  ) {
+  async findOne(@Param('id') id: string, @CurrentUser() currentUser: User) {
     return this.campaignsService.findOne(+id, currentUser);
   }
 
   @Patch(':id')
-  @Permission('campaigns:update')
+  @Permission('campaigns:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -485,7 +479,7 @@ export class CampaignsController {
   }
 
   @Delete(':id')
-  @Permission('campaigns:delete')
+  @Permission('campaigns:manage')
   @ApiParam({
     name: 'id',
     type: 'number',
@@ -499,10 +493,7 @@ export class CampaignsController {
   @ApiResponse({ status: 200, description: 'Campaign deleted successfully' })
   @ApiResponse({ status: 404, description: 'Campaign not found' })
   @ApiResponse({ status: 403, description: 'Not authorized' })
-  async remove(
-    @Param('id') id: string,
-    @CurrentUser() currentUser: User,
-  ) {
+  async remove(@Param('id') id: string, @CurrentUser() currentUser: User) {
     return this.campaignsService.remove(+id, currentUser);
   }
 

@@ -186,6 +186,7 @@ export class AuthService {
       email: usuario.email,
       sub: usuario.id,
       roleId: usuario.role?.id ?? null,
+      organizationId: usuario.organizationId ?? null,
     };
     return this.jwtService.sign(payload);
   }
@@ -195,6 +196,7 @@ export class AuthService {
       email: usuario.email,
       sub: usuario.id,
       roleId: usuario.role?.id ?? null,
+      organizationId: usuario.organizationId ?? null,
     };
     return this.jwtService.sign(payload, { expiresIn: '30d' });
   }
