@@ -126,9 +126,9 @@ export class VoterService {
     const where: any = {};
 
     // If the user is a digitador (roleId = 5), only show voters they created
-    if (user && user.roleId === 5) {
-      where.createdByUserId = user.id;
-    }
+    // if (user && user.roleId === 5) {
+    //   where.createdByUserId = user.id;
+    // }
 
     // If the user is a campaign admin (roleId = 2), filter by organization
     if (user && user.roleId === 2 && user.organizationId) {
@@ -673,9 +673,9 @@ export class VoterService {
       const where: any = {};
 
       // If the user is a digitador (roleId = 5), only show voters they created
-      if (user && user.roleId === 5) {
-        where.createdByUserId = user.id;
-      }
+      // if (user && user.roleId === 5) {
+      //   where.createdByUserId = user.id;
+      // }
 
       voters = await this.voterRepository.find({
         where,
@@ -962,11 +962,11 @@ export class VoterService {
       .leftJoinAndSelect('cv.leader', 'leader');
 
     // If the user is a digitador (roleId = 5), only show voters they created
-    if (user && user.roleId === 5) {
-      query = query.andWhere('voter.createdByUserId = :createdByUserId', {
-        createdByUserId: user.id,
-      });
-    }
+    // if (user && user.roleId === 5) {
+    //   query = query.andWhere('voter.createdByUserId = :createdByUserId', {
+    //     createdByUserId: user.id,
+    //   });
+    // }
 
     // Aplicar filtros
     if (filters.gender) {
@@ -1154,11 +1154,11 @@ export class VoterService {
     // Función helper para aplicar filtros comunes
     const applyFilters = (query: any) => {
       // If the user is a digitador (roleId = 5), only show voters they created
-      if (user && user.roleId === 5) {
-        query = query.andWhere('voter.createdByUserId = :createdByUserId', {
-          createdByUserId: user.id,
-        });
-      }
+      // if (user && user.roleId === 5) {
+      //   query = query.andWhere('voter.createdByUserId = :createdByUserId', {
+      //     createdByUserId: user.id,
+      //   });
+      // }
 
       if (filters.votingBoothId) {
         const votingBoothId = parseInt(filters.votingBoothId as any);
