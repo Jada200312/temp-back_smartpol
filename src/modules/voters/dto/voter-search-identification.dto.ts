@@ -38,6 +38,7 @@ export class VoterSearchByIdentificationDto {
     name: string;
     party: string;
     number: number;
+    organizationId: number | null;
     campaignName: string;
   }>;
 

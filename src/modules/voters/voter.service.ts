@@ -1279,6 +1279,7 @@ export class VoterService {
           name: assignment.candidate.name,
           party: assignment.candidate.party,
           number: assignment.candidate.number,
+          organizationId: assignment.candidate.campaign?.organizationId || null,
           campaignName: assignment.candidate.campaign?.name || '',
         }));
 
