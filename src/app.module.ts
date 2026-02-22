@@ -36,6 +36,7 @@ import {
   Organization,
   Campaign,
   CampaignUser,
+  VotersHistory,
 } from './database/entities';
 
 @Module({
@@ -69,6 +70,7 @@ import {
         Organization,
         Campaign,
         CampaignUser,
+        VotersHistory,
       ],
       synchronize: false,
       logging:
@@ -106,6 +108,7 @@ import {
       Organization,
       Campaign,
       CampaignUser,
+      VotersHistory,
     ]),
     AuthModule,
     CorporationModule,

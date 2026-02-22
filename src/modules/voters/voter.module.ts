@@ -6,6 +6,7 @@ import { Leader } from '../../database/entities/leader.entity';
 import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
 import { Department } from '../../database/entities/department.entity';
 import { Municipality } from '../../database/entities/municipality.entity';
+import { VotersHistory } from '../../database/entities/voters-history.entity';
 import { VoterService } from './voter.service';
 import { VoterController } from './voter.controller';
 import { VotingBooth } from 'src/database/entities/voting-booth.entity';
@@ -22,6 +23,7 @@ import { VotingTable } from 'src/database/entities/voting-table.entity';
       Municipality,
       VotingBooth,
       VotingTable,
+      VotersHistory,
     ]),
   ],
   controllers: [VoterController],
