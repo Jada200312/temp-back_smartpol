@@ -8,6 +8,8 @@ import {
   Delete,
   UseGuards,
   Query,
+  Request,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -62,7 +64,23 @@ export class UserController {
       },
     },
   })
-  async create(@Body() createUserDto: CreateUserDto): Promise<User> {
+  async create(
+    @Body() createUserDto: CreateUserDto,
+    @Request() req: any,
+  ): Promise<User> {
+    const authUser = req.user;
+
+    // Validar que candidatos (roleId=3) no puedan crear digitadores (roleId=5) ni especiales (roleId=6)
+    if (
+      authUser?.roleId === 3 &&
+      createUserDto.roleId &&
+      (createUserDto.roleId === 5 || createUserDto.roleId === 6)
+    ) {
+      throw new ForbiddenException(
+        'Candidatos no pueden crear digitadores ni usuarios especiales',
+      );
+    }
+
     return await this.userService.create(createUserDto);
   }
 
@@ -108,7 +126,20 @@ export class UserController {
     @Query('page') page: string = '1',
     @Query('limit') limit: string = '10',
     @Query('search') search?: string,
+    @Request() req?: any,
   ) {
+    const authUser = req?.user;
+
+    // Validar que candidatos (roleId=3) no puedan ver digitadores (roleId=5) ni especiales (roleId=6)
+    if (authUser?.roleId === 3 && roleId) {
+      const requestedRoleId = parseInt(roleId, 10);
+      if (requestedRoleId === 5 || requestedRoleId === 6) {
+        throw new ForbiddenException(
+          'Candidatos no pueden ver digitadores ni usuarios especiales',
+        );
+      }
+    }
+
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.max(1, parseInt(limit, 10) || 10);
 
