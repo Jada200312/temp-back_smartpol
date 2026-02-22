@@ -963,6 +963,8 @@ export class VoterService {
       .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
       .leftJoinAndSelect('cv.candidate', 'candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
+      .leftJoinAndSelect('campaign.organization', 'organization')
       .leftJoinAndSelect('cv.leader', 'leader');
 
     // If the user is a digitador (roleId = 5), only show voters they created
@@ -971,6 +973,13 @@ export class VoterService {
     //     createdByUserId: user.id,
     //   });
     // }
+
+    // Filter by user's organization
+    if (user && user.organizationId) {
+      query = query.andWhere('campaign.organizationId = :organizationId', {
+        organizationId: user.organizationId,
+      });
+    }
 
     // Aplicar filtros
     if (filters.gender) {
@@ -1164,6 +1173,13 @@ export class VoterService {
       //   });
       // }
 
+      // Filter by user's organization
+      if (user && user.organizationId) {
+        query = query.andWhere('campaign.organizationId = :organizationId', {
+          organizationId: user.organizationId,
+        });
+      }
+
       if (filters.votingBoothId) {
         const votingBoothId = parseInt(filters.votingBoothId as any);
         if (!isNaN(votingBoothId)) {
@@ -1189,6 +1205,8 @@ export class VoterService {
     let genderQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.voter', 'voter')
+      .leftJoinAndSelect('cv.candidate', 'candidate')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
       .select('voter.gender', 'gender')
       .addSelect('COUNT(DISTINCT voter.id)', 'count')
       .groupBy('voter.gender');
@@ -1198,6 +1216,8 @@ export class VoterService {
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.leader', 'leader')
       .leftJoinAndSelect('cv.voter', 'voter')
+      .leftJoinAndSelect('cv.candidate', 'candidate')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
       .select('leader.id', 'id')
       .addSelect('leader.name', 'name')
       .addSelect('COUNT(DISTINCT cv.voterId)', 'count')
@@ -1209,6 +1229,7 @@ export class VoterService {
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.candidate', 'candidate')
       .leftJoinAndSelect('candidate.corporation', 'corporation')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
       .leftJoinAndSelect('cv.voter', 'voter')
       .select('candidate.id', 'id')
       .addSelect('candidate.name', 'name')
@@ -1224,6 +1245,8 @@ export class VoterService {
       .leftJoinAndSelect('cv.voter', 'voter')
       .leftJoinAndSelect('voter.department', 'department')
       .leftJoinAndSelect('voter.municipality', 'municipality')
+      .leftJoinAndSelect('cv.candidate', 'candidate')
+      .leftJoinAndSelect('candidate.campaign', 'campaign')
       .select('department.id', 'departmentId')
       .addSelect('department.name', 'departmentName')
       .addSelect('municipality.id', 'municipalityId')
