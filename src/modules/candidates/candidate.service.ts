@@ -34,7 +34,7 @@ export class CandidateService {
   ): Promise<Candidate> {
     const { userId, campaignId, ...candidateData } = createCandidateDto;
 
-    // 1. Obtener el usuario autenticado y su organizationId
+    // 1. Obtener el usuario autenticado
     const authUser = await this.userRepository.findOne({
       where: { id: authUserId },
     });
@@ -43,11 +43,8 @@ export class CandidateService {
       throw new ForbiddenException('Authenticated user not found');
     }
 
-    if (!authUser.organizationId) {
-      throw new ForbiddenException(
-        'Authenticated user does not belong to any organization',
-      );
-    }
+    // Determinar la organizationId para validación: usar la del usuario si existe, si no, será la de la campaña
+    let operationOrganizationId = authUser.organizationId;
 
     // 2. Validar que el usuario candidato existe
     if (userId) {
@@ -60,7 +57,7 @@ export class CandidateService {
       }
     }
 
-    // 3. Si existe campaignId, validar que pertenece a la misma organización
+    // 3. Si existe campaignId, validar que pertenece a la organizationId disponible
     if (campaignId) {
       const campaign = await this.campaignRepository.findOne({
         where: { id: campaignId },
@@ -72,15 +69,27 @@ export class CandidateService {
         );
       }
 
-      // Validar que la campaña pertenece a la organización del usuario autenticado
-      if (campaign.organizationId !== authUser.organizationId) {
-        throw new ForbiddenException(
-          `Campaign ${campaignId} does not belong to your organization`,
+      // Si el usuario autenticado tiene organizationId, validar que la campaña les pertenezca
+      if (authUser.organizationId) {
+        if (campaign.organizationId !== authUser.organizationId) {
+          throw new ForbiddenException(
+            `Campaign ${campaignId} does not belong to your organization`,
+          );
+        }
+      } else {
+        // Si es superadmin sin organizationId asignada, usar la de la campaña
+        operationOrganizationId = campaign.organizationId;
+      }
+    } else {
+      // Si no hay campaignId pero el usuario tampoco tiene organizationId, no puede crear candidato
+      if (!authUser.organizationId) {
+        throw new BadRequestException(
+          'Either provide a campaignId or belong to an organization',
         );
       }
     }
 
-    // 4. Crear el candidato con la organizationId del usuario autenticado
+    // 4. Crear el candidato asociado al usuario y campaña
     const candidate = this.candidateRepository.create({
       ...candidateData,
       userId,

@@ -24,6 +24,7 @@ import { CreateVoterDto } from './dto/create-voter.dto';
 import { UpdateVoterDto } from './dto/update-voter.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { VoterReportFilterDto } from './dto/voter-report.dto';
+import { VoterSearchByIdentificationDto } from './dto/voter-search-identification.dto';
 import {
   PaginationQueryDto,
   PaginatedResponseDto,
@@ -177,6 +178,61 @@ export class VoterController {
       leaderId ? parseInt(leaderId) : undefined,
       user,
     );
+  }
+
+  @Get('search/by-identification/:identification')
+  @Permission('voters:read')
+  @ApiOperation({
+    summary: 'Search voter by identification',
+    description:
+      'Search for a voter by identification in both voters and voters_history tables. Returns voter data if found in either table, along with assignment information if available.',
+  })
+  @ApiParam({
+    name: 'identification',
+    type: 'string',
+    description: 'Voter identification number',
+    example: '1234567890',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Voter search result',
+    schema: {
+      example: {
+        status: 'assigned',
+        voter: {
+          id: 1,
+          firstName: 'Juan',
+          lastName: 'Pérez',
+          identification: '1234567890',
+          gender: 'M',
+          bloodType: 'O+',
+          birthDate: '1980-01-15',
+          phone: '3121234567',
+          address: 'Cra 5 #12-34',
+          email: 'juan@example.com',
+          occupation: 'Ingeniero',
+        },
+        assignedLeader: {
+          id: 1,
+          firstName: 'Carlos',
+          lastName: 'Lopez',
+          email: 'carlos@example.com',
+        },
+        assignedCandidates: [
+          {
+            id: 1,
+            firstName: 'Maria',
+            lastName: 'Garcia',
+            campaignName: 'Campaign 2024',
+          },
+        ],
+      },
+    },
+  })
+  async searchByIdentification(
+    @Param('identification') identification: string,
+  ): Promise<VoterSearchByIdentificationDto> {
+    return await this.voterService.searchByIdentification(identification);
   }
 
   @Get('by-candidate/:candidateId')

@@ -12,10 +12,12 @@ import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
 import { Department } from '../../database/entities/department.entity';
 import { Municipality } from '../../database/entities/municipality.entity';
 import { VotingBooth } from '../../database/entities/voting-booth.entity';
+import { VotersHistory } from '../../database/entities/voters-history.entity';
 import { CreateVoterDto } from './dto/create-voter.dto';
 import { UpdateVoterDto } from './dto/update-voter.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
 import { VoterReportFilterDto, VoterReportDto } from './dto/voter-report.dto';
+import { VoterSearchByIdentificationDto } from './dto/voter-search-identification.dto';
 import {
   PaginationQueryDto,
   PaginatedResponseDto,
@@ -38,6 +40,8 @@ export class VoterService {
     private readonly municipalityRepository: Repository<Municipality>,
     @InjectRepository(VotingBooth)
     private readonly votingBoothRepository: Repository<VotingBooth>,
+    @InjectRepository(VotersHistory)
+    private readonly votersHistoryRepository: Repository<VotersHistory>,
   ) {}
 
   async create(
@@ -1245,6 +1249,111 @@ export class VoterService {
       byLeader: leaderCount,
       byCandidate: candidateCount,
       byLocation: locationCount,
+    };
+  }
+
+  async searchByIdentification(
+    identification: string,
+  ): Promise<VoterSearchByIdentificationDto> {
+    // Step 1: Check if voter exists in voters table with candidate_voter assignments
+    const voter = await this.voterRepository.findOne({
+      where: { identification },
+    });
+
+    if (voter) {
+      // Check if voter has candidate_voter assignments
+      const candidateVoterLink = await this.candidateVoterRepository.findOne({
+        where: { voterId: voter.id },
+        relations: ['candidate', 'candidate.campaign', 'leader'],
+      });
+
+      if (candidateVoterLink) {
+        // Get all candidates and leader for this voter
+        const allAssignments = await this.candidateVoterRepository.find({
+          where: { voterId: voter.id },
+          relations: ['candidate', 'candidate.campaign', 'leader'],
+        });
+
+        const candidates = allAssignments.map((assignment) => ({
+          id: assignment.candidate.id,
+          name: assignment.candidate.name,
+          party: assignment.candidate.party,
+          number: assignment.candidate.number,
+          campaignName: assignment.candidate.campaign?.name || '',
+        }));
+
+        const leader = allAssignments[0]?.leader
+          ? {
+              id: allAssignments[0].leader.id,
+              name: allAssignments[0].leader.name,
+              document: allAssignments[0].leader.document,
+              municipality: allAssignments[0].leader.municipality,
+              phone: allAssignments[0].leader.phone,
+            }
+          : undefined;
+
+        return {
+          status: 'assigned',
+          voter: {
+            id: voter.id,
+            firstName: voter.firstName,
+            lastName: voter.lastName,
+            identification: voter.identification,
+            gender: voter.gender,
+            bloodType: voter.bloodType,
+            birthDate: voter.birthDate,
+            phone: voter.phone,
+            address: voter.address,
+            departmentId: voter.departmentId,
+            municipalityId: voter.municipalityId,
+            neighborhood: voter.neighborhood,
+            email: voter.email,
+            occupation: voter.occupation,
+            votingBoothId: voter.votingBoothId,
+            votingTableId: voter.votingTableId,
+            politicalStatus: voter.politicalStatus,
+          },
+          assignedLeader: leader,
+          assignedCandidates: candidates,
+          message: `El votante ${voter.firstName} ${voter.lastName} ya existe y está asignado`,
+        };
+      }
+    }
+
+    // Step 2: If not in voters table, check voters_history
+    const voterHistory = await this.votersHistoryRepository.findOne({
+      where: { identification },
+    });
+
+    if (voterHistory) {
+      return {
+        status: 'in_history',
+        votersHistoryData: {
+          firstName: voterHistory.firstName,
+          lastName: voterHistory.lastName,
+          identification: voterHistory.identification,
+          gender: voterHistory.gender,
+          bloodType: voterHistory.bloodType,
+          birthDate: voterHistory.birthDate,
+          phone: voterHistory.phone,
+          address: voterHistory.address,
+          departmentId: voterHistory.departmentId,
+          municipalityId: voterHistory.municipalityId,
+          neighborhood: voterHistory.neighborhood,
+          email: voterHistory.email,
+          occupation: voterHistory.occupation,
+          votingBoothId: voterHistory.votingBoothId,
+          votingTableId: voterHistory.votingTableId,
+          politicalStatus: voterHistory.politicalStatus,
+        },
+        message: `Datos encontrados en historial de votantes`,
+      };
+    }
+
+    // Step 3: If not found anywhere
+    return {
+      status: 'not_found',
+      message: `No se encontró información para la identificación ${identification}`,
     };
   }
 }
