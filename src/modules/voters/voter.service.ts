@@ -84,28 +84,6 @@ export class VoterService {
       }
     }
 
-    // Verificar que identification sea única
-    const existingIdentification = await this.voterRepository.findOneBy({
-      identification: createVoterDto.identification,
-    });
-    if (existingIdentification) {
-      throw new BadRequestException(
-        `La identificación ${createVoterDto.identification} ya existe`,
-      );
-    }
-
-    // Verificar que email sea único (solo si se proporciona)
-    if (createVoterDto.email) {
-      const existingEmail = await this.voterRepository.findOneBy({
-        email: createVoterDto.email,
-      });
-      if (existingEmail) {
-        throw new BadRequestException(
-          `El email ${createVoterDto.email} ya existe`,
-        );
-      }
-    }
-
     const voter = this.voterRepository.create({
       ...createVoterDto,
       createdByUserId,
