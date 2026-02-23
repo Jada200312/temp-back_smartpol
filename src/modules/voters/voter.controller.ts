@@ -109,7 +109,7 @@ export class VoterController {
   @ApiOperation({
     summary: 'Get all voters with pagination',
     description:
-      'Returns a paginated list of registered voters. Digitadores (roleId=5) will only see voters they created.',
+      'Returns a paginated list of registered voters. Campaign admins and digitadores will only see voters from their organization.',
   })
   @ApiQuery({
     name: 'page',
@@ -142,7 +142,7 @@ export class VoterController {
     summary:
       'Get all voters with assigned candidates/leaders (optimized for search)',
     description:
-      'Returns all voters with their assigned candidates and leaders in a single request. Filtered by role if needed. Digitadores (roleId=5) will only see voters they created.',
+      'Returns all voters with their assigned candidates and leaders in a single request. Filtered by role if needed. Campaign admins and digitadores will only see voters from their organization.',
   })
   @ApiQuery({
     name: 'roleId',
@@ -645,7 +645,7 @@ export class VoterController {
   @ApiOperation({
     summary: 'Get voter report with filters and aggregations',
     description:
-      'Get a detailed report of voters with dynamic filters and aggregations. Pagination is based on unique voters (20 per page by default). Digitadores (roleId=5) will only see voters they created.',
+      'Get a detailed report of voters with dynamic filters and aggregations. Pagination is based on unique voters (20 per page by default). Campaign admins and digitadores will only see voters from their organization.',
   })
   @ApiQuery({
     name: 'gender',
