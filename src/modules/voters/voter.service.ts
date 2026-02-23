@@ -130,7 +130,11 @@ export class VoterService {
     const where: any = {};
 
     // If the user is a digitador (roleId = 5) or campaign admin (roleId = 2), filter by organization
-    if (user && (user.roleId === 2 || user.roleId === 5) && user.organizationId) {
+    if (
+      user &&
+      (user.roleId === 2 || user.roleId === 5) &&
+      user.organizationId
+    ) {
       // Get all campaigns for this organization
       const campaigns = await this.voterRepository.query(
         'SELECT id FROM campaigns WHERE "organizationId" = $1',
@@ -687,7 +691,9 @@ export class VoterService {
             `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "candidate_id" IN 
              (SELECT id FROM candidates WHERE "campaignId" IN (${campaignIds.join(',')}))`,
           );
-          const candidateVoterIds = candidateVoterResults.map((r) => r.voter_id);
+          const candidateVoterIds = candidateVoterResults.map(
+            (r) => r.voter_id,
+          );
 
           // From leaders in these campaigns
           const leaderVoterResults = await this.voterRepository.query(
