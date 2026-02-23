@@ -36,7 +36,7 @@ export class Voter {
   @Column()
   lastName: string;
 
-  @Column({ unique: true })
+  @Column()
   identification: string;
 
   @Column()
