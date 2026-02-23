@@ -129,13 +129,8 @@ export class VoterService {
     // Build where clause
     const where: any = {};
 
-    // If the user is a digitador (roleId = 5), only show voters they created
-    // if (user && user.roleId === 5) {
-    //   where.createdByUserId = user.id;
-    // }
-
-    // If the user is a campaign admin (roleId = 2), filter by organization
-    if (user && user.roleId === 2 && user.organizationId) {
+    // If the user is a digitador (roleId = 5) or campaign admin (roleId = 2), filter by organization
+    if (user && (user.roleId === 2 || user.roleId === 5) && user.organizationId) {
       // Get all campaigns for this organization
       const campaigns = await this.voterRepository.query(
         'SELECT id FROM campaigns WHERE "organizationId" = $1',
@@ -673,13 +668,56 @@ export class VoterService {
         }
       }
     } else {
-      // Otros roles: traer todos los votantes (o filtrar para digitadores)
+      // Otros roles: traer votantes de su organización si tienen organizationId
       const where: any = {};
 
-      // If the user is a digitador (roleId = 5), only show voters they created
-      // if (user && user.roleId === 5) {
-      //   where.createdByUserId = user.id;
-      // }
+      // Digitadores (roleId = 5): mostrar todos los votantes de su organización
+      if (user && user.roleId === 5 && user.organizationId) {
+        // Get all campaigns for this organization
+        const campaigns = await this.voterRepository.query(
+          'SELECT id FROM campaigns WHERE "organizationId" = $1',
+          [user.organizationId],
+        );
+        const campaignIds = campaigns.map((c) => c.id);
+
+        // If campaigns exist, get voters from candidates and leaders
+        if (campaignIds.length > 0) {
+          // From candidates in these campaigns
+          const candidateVoterResults = await this.voterRepository.query(
+            `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "candidate_id" IN 
+             (SELECT id FROM candidates WHERE "campaignId" IN (${campaignIds.join(',')}))`,
+          );
+          const candidateVoterIds = candidateVoterResults.map((r) => r.voter_id);
+
+          // From leaders in these campaigns
+          const leaderVoterResults = await this.voterRepository.query(
+            `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "leader_id" IN 
+             (SELECT id FROM leaders WHERE "campaignId" IN (${campaignIds.join(',')}))`,
+          );
+          const leaderVoterIds = leaderVoterResults.map((r) => r.voter_id);
+
+          // From digitadores in this organization
+          const digitadorVoterResults = await this.voterRepository.query(
+            `SELECT DISTINCT id FROM voters WHERE "createdByUserId" IN 
+             (SELECT id FROM users WHERE "organizationId" = $1)`,
+            [user.organizationId],
+          );
+          const digitadorVoterIds = digitadorVoterResults.map((r) => r.id);
+
+          // Combine and deduplicate
+          const allVoterIds = [
+            ...new Set([
+              ...candidateVoterIds,
+              ...leaderVoterIds,
+              ...digitadorVoterIds,
+            ]),
+          ];
+
+          if (allVoterIds.length > 0) {
+            where.id = In(allVoterIds);
+          }
+        }
+      }
 
       voters = await this.voterRepository.find({
         where,
@@ -967,14 +1005,8 @@ export class VoterService {
       .leftJoinAndSelect('campaign.organization', 'organization')
       .leftJoinAndSelect('cv.leader', 'leader');
 
-    // If the user is a digitador (roleId = 5), only show voters they created
-    // if (user && user.roleId === 5) {
-    //   query = query.andWhere('voter.createdByUserId = :createdByUserId', {
-    //     createdByUserId: user.id,
-    //   });
-    // }
-
     // Filter by user's organization
+    // This applies to: campaign admins (roleId=2) and digitadores (roleId=5)
     if (user && user.organizationId) {
       query = query.andWhere('campaign.organizationId = :organizationId', {
         organizationId: user.organizationId,
@@ -1166,14 +1198,8 @@ export class VoterService {
   ): Promise<any> {
     // Función helper para aplicar filtros comunes
     const applyFilters = (query: any) => {
-      // If the user is a digitador (roleId = 5), only show voters they created
-      // if (user && user.roleId === 5) {
-      //   query = query.andWhere('voter.createdByUserId = :createdByUserId', {
-      //     createdByUserId: user.id,
-      //   });
-      // }
-
       // Filter by user's organization
+      // This applies to: campaign admins (roleId=2) and digitadores (roleId=5)
       if (user && user.organizationId) {
         query = query.andWhere('campaign.organizationId = :organizationId', {
           organizationId: user.organizationId,
