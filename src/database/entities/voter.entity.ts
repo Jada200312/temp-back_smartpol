@@ -26,6 +26,7 @@ import { User } from './user.entity';
 @Index(['email'])
 @Index(['phone'])
 @Index(['createdByUserId'])
+@Index(['hasVoted'])
 export class Voter {
   @PrimaryGeneratedColumn()
   id: number;
@@ -104,6 +105,9 @@ export class Voter {
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'createdByUserId' })
   createdByUser: User;
+
+  @Column({ name: 'hasvoted', default: false })
+  hasVoted: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

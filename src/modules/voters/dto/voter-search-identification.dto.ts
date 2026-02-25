@@ -1,5 +1,8 @@
 export class VoterSearchByIdentificationDto {
   // Status can be 'assigned', 'in_history', or 'not_found'
+  // - assigned: voter exists with assignments in user's organization
+  // - in_history: voter exists only in history table (allow autocomplete)
+  // - not_found: voter doesn't exist anywhere or exists but in other org (allow creation)
   status: 'assigned' | 'in_history' | 'not_found';
 
   // If status is 'assigned', these fields will be populated
@@ -21,6 +24,7 @@ export class VoterSearchByIdentificationDto {
     votingBoothId: number;
     votingTableId: string;
     politicalStatus: string;
+    hasVoted: boolean;
   };
 
   // If status is 'assigned', this field will be populated

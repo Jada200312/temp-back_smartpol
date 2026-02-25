@@ -31,6 +31,8 @@ import {
 } from './dto/pagination-query.dto';
 import { Voter } from '../../database/entities/voter.entity';
 import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
+import { RegisterVoteDto } from './dto/register-vote.dto';
+import { VotingStatsDto } from './dto/voting-stats.dto';
 
 @ApiTags('Voters')
 @Controller('voters')
@@ -101,7 +103,11 @@ export class VoterController {
     @Body() createVoterDto: CreateVoterDto,
     @CurrentUser() user: any,
   ): Promise<Voter> {
-    return await this.voterService.create(createVoterDto, user.id);
+    return await this.voterService.create(
+      createVoterDto,
+      user.id,
+      user.organizationId,
+    );
   }
 
   @Get()
@@ -231,8 +237,36 @@ export class VoterController {
   })
   async searchByIdentification(
     @Param('identification') identification: string,
+    @CurrentUser() user: any,
   ): Promise<VoterSearchByIdentificationDto> {
-    return await this.voterService.searchByIdentification(identification);
+    return await this.voterService.searchByIdentification(identification, user);
+  }
+
+  @Get('by-identification-diad/:identification')
+  @Permission('voting:access')
+  @ApiParam({
+    name: 'identification',
+    type: 'string',
+    description: 'Voter identification',
+    example: '1234567890',
+  })
+  @ApiOperation({
+    summary: 'Search voter by identification for Día D',
+    description:
+      'Search for a voter by their identification (cédula) number for Día D voting. Only searches in active voters, not in history.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Voter found',
+  })
+  async searchByIdentificationForDiaD(
+    @Param('identification') identification: string,
+    @CurrentUser() user: any,
+  ): Promise<VoterSearchByIdentificationDto> {
+    return await this.voterService.searchByIdentificationForDiaD(
+      identification,
+      user,
+    );
   }
 
   @Get('by-candidate/:candidateId')
@@ -341,6 +375,96 @@ export class VoterController {
   ): Promise<any> {
     const voter = await this.voterService.findByIdentification(identification);
     return voter || null;
+  }
+
+  @Get('stats')
+  @Permission('voters:read')
+  @ApiOperation({
+    summary: 'Get voting statistics',
+    description:
+      'Get real-time statistics of expected, registered, and pending votes for Día D report',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Voting statistics retrieved successfully',
+    schema: {
+      example: {
+        expected: 1000,
+        registered: 350,
+        pending: 650,
+      },
+    },
+  })
+  async getVotingStats(@CurrentUser() user: any): Promise<VotingStatsDto> {
+    return await this.voterService.getVotingStats(user);
+  }
+
+  @Get('list/registered')
+  @Permission('voters:read')
+  @ApiOperation({
+    summary: 'Get registered voters list',
+    description:
+      'Get a list of all voters who have already voted (hasVoted = true)',
+  })
+  @ApiQuery({
+    name: 'page',
+    type: 'number',
+    required: false,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Voters per page (default: 20)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Registered voters retrieved successfully',
+  })
+  async getRegisteredVoters(
+    @Query() paginationQueryDto: PaginationQueryDto,
+    @CurrentUser() user: any,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    return await this.voterService.getVotersByStatus(
+      true,
+      paginationQueryDto,
+      user,
+    );
+  }
+
+  @Get('list/pending')
+  @Permission('voters:read')
+  @ApiOperation({
+    summary: 'Get pending voters list',
+    description:
+      'Get a list of all voters who have not yet voted (hasVoted = false)',
+  })
+  @ApiQuery({
+    name: 'page',
+    type: 'number',
+    required: false,
+    description: 'Page number (default: 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: 'number',
+    required: false,
+    description: 'Voters per page (default: 20)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pending voters retrieved successfully',
+  })
+  async getPendingVoters(
+    @Query() paginationQueryDto: PaginationQueryDto,
+    @CurrentUser() user: any,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    return await this.voterService.getVotersByStatus(
+      false,
+      paginationQueryDto,
+      user,
+    );
   }
 
   @Get(':id')
@@ -716,5 +840,115 @@ export class VoterController {
     @CurrentUser() user?: any,
   ): Promise<any> {
     return await this.voterService.getVoterReport(filters, user);
+  }
+
+  @Post('register-vote')
+  @Permission('voters:update')
+  @ApiOperation({
+    summary: 'Register vote for a voter',
+    description:
+      'Register that a voter has voted by their identification number. The voter status changes from "Pending" to "Registered".',
+  })
+  @ApiBody({
+    type: RegisterVoteDto,
+    description: 'Voter identification number',
+    examples: {
+      example1: {
+        value: { identification: '1234567890' },
+        description: 'Example of registering a vote',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Vote registered successfully',
+    schema: {
+      example: {
+        id: 1,
+        firstName: 'Juan',
+        lastName: 'Pérez',
+        identification: '1234567890',
+        hasVoted: true,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Voter not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Voter has already voted',
+  })
+  async registerVote(
+    @Body() registerVoteDto: RegisterVoteDto,
+    @CurrentUser() user: any,
+  ): Promise<Partial<Voter>> {
+    const voter = await this.voterService.registerVote(
+      registerVoteDto.identification,
+      user,
+    );
+    return {
+      id: voter.id,
+      firstName: voter.firstName,
+      lastName: voter.lastName,
+      identification: voter.identification,
+      hasVoted: voter.hasVoted,
+    };
+  }
+
+  @Post('unregister-vote')
+  @Permission('voters:update')
+  @ApiOperation({
+    summary: 'Unregister vote for a voter',
+    description:
+      'Remove a voter vote by their identification number. Changes the voter status from "Registered" back to "Pending".',
+  })
+  @ApiBody({
+    type: RegisterVoteDto,
+    description: 'Voter identification number',
+    examples: {
+      example1: {
+        value: { identification: '1234567890' },
+        description: 'Example of unregistering a vote',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Vote unregistered successfully',
+    schema: {
+      example: {
+        id: 1,
+        firstName: 'Juan',
+        lastName: 'Pérez',
+        identification: '1234567890',
+        hasVoted: false,
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Voter not found',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Voter has not voted',
+  })
+  async unregisterVote(
+    @Body() registerVoteDto: RegisterVoteDto,
+    @CurrentUser() user: any,
+  ): Promise<Partial<Voter>> {
+    const voter = await this.voterService.unregisterVote(
+      registerVoteDto.identification,
+      user,
+    );
+    return {
+      id: voter.id,
+      firstName: voter.firstName,
+      lastName: voter.lastName,
+      identification: voter.identification,
+      hasVoted: voter.hasVoted,
+    };
   }
 }

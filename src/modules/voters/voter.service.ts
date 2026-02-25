@@ -47,7 +47,30 @@ export class VoterService {
   async create(
     createVoterDto: CreateVoterDto,
     createdByUserId?: number,
+    organizationId?: number,
   ): Promise<Voter> {
+    // Validar que no existe votante con la misma identificación en la misma organización
+    if (organizationId) {
+      const existingVoter = await this.candidateVoterRepository
+        .createQueryBuilder('cv')
+        .leftJoinAndSelect('cv.voter', 'voter')
+        .leftJoinAndSelect('cv.candidate', 'candidate')
+        .leftJoinAndSelect('candidate.campaign', 'campaign')
+        .where('voter.identification = :identification', {
+          identification: createVoterDto.identification,
+        })
+        .andWhere('campaign.organizationId = :organizationId', {
+          organizationId,
+        })
+        .getOne();
+
+      if (existingVoter) {
+        throw new BadRequestException(
+          `Ya existe un votante con la identificación ${createVoterDto.identification} en tu organización. ${existingVoter.voter.firstName} ${existingVoter.voter.lastName}`,
+        );
+      }
+    }
+
     // Validar que el departamento existe
     if (createVoterDto.departmentId) {
       const department = await this.departmentRepository.findOneBy({
@@ -80,28 +103,6 @@ export class VoterService {
       if (!votingBooth) {
         throw new BadRequestException(
           `Puesto de votación con ID ${createVoterDto.votingBoothId} no encontrado`,
-        );
-      }
-    }
-
-    // Verificar que identification sea única
-    const existingIdentification = await this.voterRepository.findOneBy({
-      identification: createVoterDto.identification,
-    });
-    if (existingIdentification) {
-      throw new BadRequestException(
-        `La identificación ${createVoterDto.identification} ya existe`,
-      );
-    }
-
-    // Verificar que email sea único (solo si se proporciona)
-    if (createVoterDto.email) {
-      const existingEmail = await this.voterRepository.findOneBy({
-        email: createVoterDto.email,
-      });
-      if (existingEmail) {
-        throw new BadRequestException(
-          `El email ${createVoterDto.email} ya existe`,
         );
       }
     }
@@ -1079,8 +1080,8 @@ export class VoterService {
     }
 
     if (filters.votingTableId) {
-      const votingTableId = parseInt(filters.votingTableId as any);
-      if (!isNaN(votingTableId) && votingTableId > 0) {
+      const votingTableId = String(filters.votingTableId).trim();
+      if (votingTableId) {
         query = query.andWhere('voter.votingTableId = :votingTableId', {
           votingTableId,
         });
@@ -1222,8 +1223,8 @@ export class VoterService {
       }
 
       if (filters.votingTableId) {
-        const votingTableId = parseInt(filters.votingTableId as any);
-        if (!isNaN(votingTableId)) {
+        const votingTableId = String(filters.votingTableId).trim();
+        if (votingTableId) {
           query = query.andWhere('voter.votingTableId = :votingTableId', {
             votingTableId,
           });
@@ -1309,74 +1310,89 @@ export class VoterService {
 
   async searchByIdentification(
     identification: string,
+    user: any,
   ): Promise<VoterSearchByIdentificationDto> {
-    // Step 1: Check if voter exists in voters table with candidate_voter assignments
-    const voter = await this.voterRepository.findOne({
-      where: { identification },
-    });
+    // Step 1: Check if voter exists with assignments in user's organization
+    let userOrgId = user?.organizationId ? Number(user.organizationId) : null;
 
-    if (voter) {
-      // Check if voter has candidate_voter assignments
-      const candidateVoterLink = await this.candidateVoterRepository.findOne({
-        where: { voterId: voter.id },
-        relations: ['candidate', 'candidate.campaign', 'leader'],
-      });
+    if (userOrgId) {
+      // Search for voter with assignments specifically in user's organization
+      const voterInUserOrg = await this.candidateVoterRepository
+        .createQueryBuilder('cv')
+        .leftJoinAndSelect('cv.voter', 'voter')
+        .leftJoinAndSelect('cv.candidate', 'candidate')
+        .leftJoinAndSelect('candidate.campaign', 'campaign')
+        .leftJoinAndSelect('cv.leader', 'leader')
+        .where('voter.identification = :identification', { identification })
+        .andWhere('campaign.organizationId = :orgId', { orgId: userOrgId })
+        .getOne();
 
-      if (candidateVoterLink) {
-        // Get all candidates and leader for this voter
-        const allAssignments = await this.candidateVoterRepository.find({
-          where: { voterId: voter.id },
-          relations: ['candidate', 'candidate.campaign', 'leader'],
-        });
+      if (voterInUserOrg) {
+        // Get all assignments for this voter in user's organization
+        const allAssignmentsInUserOrg =
+          await this.candidateVoterRepository.find({
+            where: { voterId: voterInUserOrg.voter.id },
+            relations: ['candidate', 'candidate.campaign', 'leader'],
+          });
 
-        const candidates = allAssignments.map((assignment) => ({
-          id: assignment.candidate.id,
-          name: assignment.candidate.name,
-          party: assignment.candidate.party,
-          number: assignment.candidate.number,
-          organizationId: assignment.candidate.campaign?.organizationId || null,
-          campaignName: assignment.candidate.campaign?.name || '',
-        }));
+        const userOrgAssignments = allAssignmentsInUserOrg.filter(
+          (assignment) =>
+            assignment.candidate.campaign &&
+            Number(assignment.candidate.campaign.organizationId) === userOrgId,
+        );
 
-        const leader = allAssignments[0]?.leader
-          ? {
-              id: allAssignments[0].leader.id,
-              name: allAssignments[0].leader.name,
-              document: allAssignments[0].leader.document,
-              municipality: allAssignments[0].leader.municipality,
-              phone: allAssignments[0].leader.phone,
-            }
-          : undefined;
+        if (userOrgAssignments.length > 0) {
+          const candidates = userOrgAssignments.map((assignment) => ({
+            id: assignment.candidate.id,
+            name: assignment.candidate.name,
+            party: assignment.candidate.party,
+            number: assignment.candidate.number,
+            organizationId:
+              assignment.candidate.campaign?.organizationId || null,
+            campaignName: assignment.candidate.campaign?.name || '',
+          }));
 
-        return {
-          status: 'assigned',
-          voter: {
-            id: voter.id,
-            firstName: voter.firstName,
-            lastName: voter.lastName,
-            identification: voter.identification,
-            gender: voter.gender,
-            bloodType: voter.bloodType,
-            birthDate: voter.birthDate,
-            phone: voter.phone,
-            address: voter.address,
-            departmentId: voter.departmentId,
-            municipalityId: voter.municipalityId,
-            neighborhood: voter.neighborhood,
-            email: voter.email,
-            occupation: voter.occupation,
-            votingBoothId: voter.votingBoothId,
-            votingTableId: voter.votingTableId,
-            politicalStatus: voter.politicalStatus,
-          },
-          assignedLeader: leader,
-          assignedCandidates: candidates,
-          message: `El votante ${voter.firstName} ${voter.lastName} ya existe y está asignado`,
-        };
+          const leader = userOrgAssignments[0]?.leader
+            ? {
+                id: userOrgAssignments[0].leader.id,
+                name: userOrgAssignments[0].leader.name,
+                document: userOrgAssignments[0].leader.document,
+                municipality: userOrgAssignments[0].leader.municipality,
+                phone: userOrgAssignments[0].leader.phone,
+              }
+            : undefined;
+
+          return {
+            status: 'assigned',
+            voter: {
+              id: voterInUserOrg.voter.id,
+              firstName: voterInUserOrg.voter.firstName,
+              lastName: voterInUserOrg.voter.lastName,
+              identification: voterInUserOrg.voter.identification,
+              gender: voterInUserOrg.voter.gender,
+              bloodType: voterInUserOrg.voter.bloodType,
+              birthDate: voterInUserOrg.voter.birthDate,
+              phone: voterInUserOrg.voter.phone,
+              address: voterInUserOrg.voter.address,
+              departmentId: voterInUserOrg.voter.departmentId,
+              municipalityId: voterInUserOrg.voter.municipalityId,
+              neighborhood: voterInUserOrg.voter.neighborhood,
+              email: voterInUserOrg.voter.email,
+              occupation: voterInUserOrg.voter.occupation,
+              votingBoothId: voterInUserOrg.voter.votingBoothId,
+              votingTableId: voterInUserOrg.voter.votingTableId,
+              politicalStatus: voterInUserOrg.voter.politicalStatus,
+              hasVoted: voterInUserOrg.voter.hasVoted,
+            },
+            assignedLeader: leader,
+            assignedCandidates: candidates,
+            message: `El votante ${voterInUserOrg.voter.firstName} ${voterInUserOrg.voter.lastName} ya existe y está asignado`,
+          };
+        }
       }
     }
 
-    // Step 2: If not in voters table, check voters_history
+    // Step 2: If not found in user's organization, check voters_history
     const voterHistory = await this.votersHistoryRepository.findOne({
       where: { identification },
     });
@@ -1410,6 +1426,334 @@ export class VoterService {
     return {
       status: 'not_found',
       message: `No se encontró información para la identificación ${identification}`,
+    };
+  }
+
+  async searchByIdentificationForDiaD(
+    identification: string,
+    user: any,
+  ): Promise<VoterSearchByIdentificationDto> {
+    // Búsqueda SOLO en votantes activos para el Día D
+    // NO busca en historial
+    let userOrgId = user?.organizationId ? Number(user.organizationId) : null;
+
+    if (userOrgId) {
+      // Search for voter with assignments specifically in user's organization
+      const voterInUserOrg = await this.candidateVoterRepository
+        .createQueryBuilder('cv')
+        .leftJoinAndSelect('cv.voter', 'voter')
+        .leftJoinAndSelect('cv.candidate', 'candidate')
+        .leftJoinAndSelect('candidate.campaign', 'campaign')
+        .leftJoinAndSelect('cv.leader', 'leader')
+        .where('voter.identification = :identification', { identification })
+        .andWhere('campaign.organizationId = :orgId', { orgId: userOrgId })
+        .getOne();
+
+      if (voterInUserOrg) {
+        // Get all assignments for this voter in user's organization
+        const allAssignmentsInUserOrg =
+          await this.candidateVoterRepository.find({
+            where: { voterId: voterInUserOrg.voter.id },
+            relations: ['candidate', 'candidate.campaign', 'leader'],
+          });
+
+        const userOrgAssignments = allAssignmentsInUserOrg.filter(
+          (assignment) =>
+            assignment.candidate.campaign &&
+            Number(assignment.candidate.campaign.organizationId) === userOrgId,
+        );
+
+        if (userOrgAssignments.length > 0) {
+          const candidates = userOrgAssignments.map((assignment) => ({
+            id: assignment.candidate.id,
+            name: assignment.candidate.name,
+            party: assignment.candidate.party,
+            number: assignment.candidate.number,
+            organizationId:
+              assignment.candidate.campaign?.organizationId || null,
+            campaignName: assignment.candidate.campaign?.name || '',
+          }));
+
+          const leader = userOrgAssignments[0]?.leader
+            ? {
+                id: userOrgAssignments[0].leader.id,
+                name: userOrgAssignments[0].leader.name,
+                document: userOrgAssignments[0].leader.document,
+                municipality: userOrgAssignments[0].leader.municipality,
+                phone: userOrgAssignments[0].leader.phone,
+              }
+            : undefined;
+
+          return {
+            status: 'assigned',
+            voter: {
+              id: voterInUserOrg.voter.id,
+              firstName: voterInUserOrg.voter.firstName,
+              lastName: voterInUserOrg.voter.lastName,
+              identification: voterInUserOrg.voter.identification,
+              gender: voterInUserOrg.voter.gender,
+              bloodType: voterInUserOrg.voter.bloodType,
+              birthDate: voterInUserOrg.voter.birthDate,
+              phone: voterInUserOrg.voter.phone,
+              address: voterInUserOrg.voter.address,
+              departmentId: voterInUserOrg.voter.departmentId,
+              municipalityId: voterInUserOrg.voter.municipalityId,
+              neighborhood: voterInUserOrg.voter.neighborhood,
+              email: voterInUserOrg.voter.email,
+              occupation: voterInUserOrg.voter.occupation,
+              votingBoothId: voterInUserOrg.voter.votingBoothId,
+              votingTableId: voterInUserOrg.voter.votingTableId,
+              politicalStatus: voterInUserOrg.voter.politicalStatus,
+              hasVoted: voterInUserOrg.voter.hasVoted,
+            },
+            assignedLeader: leader,
+            assignedCandidates: candidates,
+            message: `El votante ${voterInUserOrg.voter.firstName} ${voterInUserOrg.voter.lastName} ya existe y está asignado`,
+          };
+        }
+      }
+    } else {
+      // Global admin: buscar en TODOS los votantes activos
+      const voter = await this.voterRepository.findOne({
+        where: { identification },
+        relations: ['candidates', 'candidates.campaign'],
+      });
+
+      if (voter && voter.candidates && voter.candidates.length > 0) {
+        const candidates = voter.candidates.map((candidate) => ({
+          id: candidate.id,
+          name: candidate.name,
+          party: candidate.party,
+          number: candidate.number,
+          organizationId: candidate.campaign?.organizationId || null,
+          campaignName: candidate.campaign?.name || '',
+        }));
+
+        return {
+          status: 'assigned',
+          voter: {
+            id: voter.id,
+            firstName: voter.firstName,
+            lastName: voter.lastName,
+            identification: voter.identification,
+            gender: voter.gender,
+            bloodType: voter.bloodType,
+            birthDate: voter.birthDate,
+            phone: voter.phone,
+            address: voter.address,
+            departmentId: voter.departmentId,
+            municipalityId: voter.municipalityId,
+            neighborhood: voter.neighborhood,
+            email: voter.email,
+            occupation: voter.occupation,
+            votingBoothId: voter.votingBoothId,
+            votingTableId: voter.votingTableId,
+            politicalStatus: voter.politicalStatus,
+            hasVoted: voter.hasVoted,
+          },
+          assignedCandidates: candidates,
+          message: `El votante ${voter.firstName} ${voter.lastName} ya existe y está asignado`,
+        };
+      }
+    }
+
+    // If not found in active voters (NO history search for DiaD)
+    return {
+      status: 'not_found',
+      message: `No se encontró un votante activo con la identificación ${identification}`,
+    };
+  }
+
+  async registerVote(identification: string, user: any): Promise<Voter> {
+    // Find voter by identification
+    const voter = await this.voterRepository.findOne({
+      where: { identification },
+    });
+
+    if (!voter) {
+      throw new NotFoundException(
+        `Votante con identificación ${identification} no encontrado`,
+      );
+    }
+
+    // Check if voter has already voted
+    if (voter.hasVoted) {
+      throw new BadRequestException(
+        `El votante ${voter.firstName} ${voter.lastName} ya ha votado`,
+      );
+    }
+
+    // Register the vote
+    voter.hasVoted = true;
+    return await this.voterRepository.save(voter);
+  }
+
+  async unregisterVote(identification: string, user: any): Promise<Voter> {
+    // Find voter by identification
+    const voter = await this.voterRepository.findOne({
+      where: { identification },
+    });
+
+    if (!voter) {
+      throw new NotFoundException(
+        `Votante con identificación ${identification} no encontrado`,
+      );
+    }
+
+    // Check if voter has already voted
+    if (!voter.hasVoted) {
+      throw new BadRequestException(
+        `El votante ${voter.firstName} ${voter.lastName} no ha registrado un voto`,
+      );
+    }
+
+    // Unregister the vote (set hasVoted to false)
+    voter.hasVoted = false;
+    return await this.voterRepository.save(voter);
+  }
+
+  async getVotingStats(user: any): Promise<{
+    expected: number;
+    registered: number;
+    pending: number;
+  }> {
+    // If user has organizationId, filter voters by organization
+    if (user?.organizationId) {
+      // Get campaigns for this organization
+      const campaigns = await this.voterRepository.query(
+        'SELECT id FROM campaigns WHERE "organizationId" = $1',
+        [user.organizationId],
+      );
+      const campaignIds = campaigns.map((c) => c.id);
+
+      if (campaignIds.length === 0) {
+        return {
+          expected: 0,
+          registered: 0,
+          pending: 0,
+        };
+      }
+
+      // Get voters assigned to candidates in these campaigns
+      const [expectedQuery, registeredQuery] = await Promise.all([
+        this.voterRepository.query(
+          `SELECT DISTINCT v.id FROM voters v
+           INNER JOIN candidate_voter cv ON v.id = cv."voter_id"
+           INNER JOIN candidates c ON cv."candidate_id" = c.id
+           WHERE c."campaignId" IN (${campaignIds.join(',')})`,
+        ),
+        this.voterRepository.query(
+          `SELECT DISTINCT v.id FROM voters v
+           INNER JOIN candidate_voter cv ON v.id = cv."voter_id"
+           INNER JOIN candidates c ON cv."candidate_id" = c.id
+           WHERE c."campaignId" IN (${campaignIds.join(',')}) AND v."hasvoted" = true`,
+        ),
+      ]);
+
+      const expected = expectedQuery.length;
+      const registered = registeredQuery.length;
+      const pending = expected - registered;
+
+      return {
+        expected,
+        registered,
+        pending,
+      };
+    }
+
+    // If no organizationId, return global stats
+    const expected = await this.voterRepository.count();
+
+    const registered = await this.voterRepository.count({
+      where: { hasVoted: true },
+    });
+
+    const pending = expected - registered;
+
+    return {
+      expected,
+      registered,
+      pending,
+    };
+  }
+
+  async getVotersByStatus(
+    hasVoted: boolean,
+    paginationQueryDto: any,
+    user: any,
+  ): Promise<any> {
+    const page = paginationQueryDto.page || 1;
+    const limit = paginationQueryDto.limit || 20;
+    const skip = (page - 1) * limit;
+
+    // If user has organizationId, filter voters by organization
+    if (user?.organizationId) {
+      // Get campaigns for this organization
+      const campaigns = await this.voterRepository.query(
+        'SELECT id FROM campaigns WHERE "organizationId" = $1',
+        [user.organizationId],
+      );
+      const campaignIds = campaigns.map((c) => c.id);
+
+      if (campaignIds.length === 0) {
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            page,
+            limit,
+            pages: 0,
+          },
+        };
+      }
+
+      // Get voters assigned to candidates in these campaigns with pagination
+      const [voters, total] = await Promise.all([
+        this.voterRepository.query(
+          `SELECT DISTINCT v.* FROM voters v
+           INNER JOIN candidate_voter cv ON v.id = cv."voter_id"
+           INNER JOIN candidates c ON cv."candidate_id" = c.id
+           WHERE c."campaignId" IN (${campaignIds.join(',')}) AND v."hasvoted" = $1
+           ORDER BY v."createdAt" DESC
+           LIMIT $2 OFFSET $3`,
+          [hasVoted, limit, skip],
+        ),
+        this.voterRepository.query(
+          `SELECT COUNT(DISTINCT v.id) as count FROM voters v
+           INNER JOIN candidate_voter cv ON v.id = cv."voter_id"
+           INNER JOIN candidates c ON cv."candidate_id" = c.id
+           WHERE c."campaignId" IN (${campaignIds.join(',')}) AND v."hasvoted" = $1`,
+          [hasVoted],
+        ),
+      ]);
+
+      return {
+        data: voters,
+        pagination: {
+          total: parseInt(total[0]?.count || 0, 10),
+          page,
+          limit,
+          pages: Math.ceil(parseInt(total[0]?.count || 0, 10) / limit),
+        },
+      };
+    }
+
+    // If no organizationId, return all voters with this status
+    const [voters, total] = await this.voterRepository.findAndCount({
+      where: { hasVoted },
+      skip,
+      take: limit,
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      data: voters,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
     };
   }
 }
