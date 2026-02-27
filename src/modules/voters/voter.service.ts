@@ -856,117 +856,99 @@ export class VoterService {
     return voter || null;
   }
 
-  async update(id: number, updateVoterDto: UpdateVoterDto): Promise<Voter> {
+  async update(
+    id: number,
+    updateVoterDto: UpdateVoterDto,
+    organizationId?: number,
+  ): Promise<Voter> {
     const voter = await this.voterRepository.findOneBy({ id });
 
     if (!voter) {
       throw new NotFoundException(`Votante con ID ${id} no encontrado`);
     }
 
-    // Validaciones en BATCH (no N+1)
-    const validationQueries: Promise<any>[] = [];
+    // Validaciones usando un objeto nombrado (no array desordenado)
+    const validations: any = {
+      existingIdentification: null,
+      existingEmail: null,
+      department: null,
+      municipality: null,
+      votingBooth: null,
+    };
 
     // Validar identification si se actualiza
     if (
       updateVoterDto.identification &&
       updateVoterDto.identification !== voter.identification
     ) {
-      validationQueries.push(
-        this.voterRepository.findOneBy({
+      validations.existingIdentification = await this.voterRepository.findOneBy(
+        {
           identification: updateVoterDto.identification,
-        }),
+        },
       );
-    }
 
-    // Validar email si se actualiza
-    if (updateVoterDto.email && updateVoterDto.email !== voter.email) {
-      validationQueries.push(
-        this.voterRepository.findOneBy({
-          email: updateVoterDto.email,
-        }),
-      );
-    }
-
-    // Validar departamento si se actualiza
-    if (updateVoterDto.departmentId) {
-      validationQueries.push(
-        this.departmentRepository.findOneBy({
-          id: updateVoterDto.departmentId,
-        }),
-      );
-    }
-
-    // Validar municipio si se actualiza
-    if (updateVoterDto.municipalityId) {
-      validationQueries.push(
-        this.municipalityRepository.findOneBy({
-          id: updateVoterDto.municipalityId,
-        }),
-      );
-    }
-
-    // Validar puesto de votación si se actualiza
-    if (updateVoterDto.votingBoothId) {
-      validationQueries.push(
-        this.votingBoothRepository.findOneBy({
-          id: updateVoterDto.votingBoothId,
-        }),
-      );
-    }
-
-    // Ejecutar todas las validaciones en paralelo
-    const [
-      existingIdentification,
-      existingEmail,
-      department,
-      municipality,
-      votingBooth,
-    ] = await Promise.all(validationQueries);
-
-    // Checking resultados
-    let queryIndex = 0;
-
-    if (
-      updateVoterDto.identification &&
-      updateVoterDto.identification !== voter.identification
-    ) {
-      if (existingIdentification) {
+      if (validations.existingIdentification) {
         throw new BadRequestException(
           `La identificación ${updateVoterDto.identification} ya existe`,
         );
       }
-      queryIndex++;
     }
 
+    // Validar email si se actualiza
     if (updateVoterDto.email && updateVoterDto.email !== voter.email) {
-      if (existingEmail) {
+      validations.existingEmail = await this.voterRepository.findOneBy({
+        email: updateVoterDto.email,
+      });
+
+      if (validations.existingEmail) {
         throw new BadRequestException(
           `El email ${updateVoterDto.email} ya existe`,
         );
       }
-      queryIndex++;
     }
 
-    if (updateVoterDto.departmentId) {
-      if (!department) {
+    // Validar departamento si se actualiza (y es diferente del actual)
+    if (
+      updateVoterDto.departmentId &&
+      updateVoterDto.departmentId !== voter.departmentId
+    ) {
+      validations.department = await this.departmentRepository.findOneBy({
+        id: updateVoterDto.departmentId,
+      });
+
+      if (!validations.department) {
         throw new BadRequestException(
           `Departamento con ID ${updateVoterDto.departmentId} no encontrado`,
         );
       }
-      queryIndex++;
     }
 
-    if (updateVoterDto.municipalityId) {
-      if (!municipality) {
+    // Validar municipio si se actualiza (y es diferente del actual)
+    if (
+      updateVoterDto.municipalityId &&
+      updateVoterDto.municipalityId !== voter.municipalityId
+    ) {
+      validations.municipality = await this.municipalityRepository.findOneBy({
+        id: updateVoterDto.municipalityId,
+      });
+
+      if (!validations.municipality) {
         throw new BadRequestException(
           `Municipio con ID ${updateVoterDto.municipalityId} no encontrado`,
         );
       }
-      queryIndex++;
     }
 
-    if (updateVoterDto.votingBoothId) {
-      if (!votingBooth) {
+    // Validar puesto de votación si se actualiza (y es diferente del actual)
+    if (
+      updateVoterDto.votingBoothId &&
+      updateVoterDto.votingBoothId !== voter.votingBoothId
+    ) {
+      validations.votingBooth = await this.votingBoothRepository.findOneBy({
+        id: updateVoterDto.votingBoothId,
+      });
+
+      if (!validations.votingBooth) {
         throw new BadRequestException(
           `Puesto de votación con ID ${updateVoterDto.votingBoothId} no encontrado`,
         );
