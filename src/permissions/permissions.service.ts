@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -8,6 +8,7 @@ import {
   User,
   Role,
 } from '../database/entities';
+import { CacheService } from '../common/cache/cache.service';
 
 @Injectable()
 export class PermissionsService {
@@ -24,6 +25,8 @@ export class PermissionsService {
     private usersRepo: Repository<User>,
     @InjectRepository(Role)
     private rolesRepo: Repository<Role>,
+    @Optional()
+    private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -270,6 +273,16 @@ export class PermissionsService {
    * Obtiene todos los permisos disponibles
    */
   async getAllPermissions(): Promise<Permission[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'permissions:all',
+        () =>
+          this.permissionsRepo.find({
+            order: { resource: 'ASC', action: 'ASC' },
+          }),
+        3600, // 1 hora
+      );
+    }
     return this.permissionsRepo.find({
       order: { resource: 'ASC', action: 'ASC' },
     });
@@ -279,6 +292,13 @@ export class PermissionsService {
    * Obtiene un permiso por ID
    */
   async getPermissionById(id: number): Promise<Permission | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `permission:${id}`,
+        () => this.permissionsRepo.findOne({ where: { id } }),
+        3600,
+      );
+    }
     return this.permissionsRepo.findOne({ where: { id } });
   }
 
@@ -286,6 +306,26 @@ export class PermissionsService {
    * Obtiene permisos agrupados por recurso
    */
   async getPermissionsByResource(): Promise<Record<string, Permission[]>> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'permissions:by-resource',
+        async () => {
+          const permissions = await this.getAllPermissions();
+          return permissions.reduce(
+            (acc, perm) => {
+              if (!acc[perm.resource]) {
+                acc[perm.resource] = [];
+              }
+              acc[perm.resource].push(perm);
+              return acc;
+            },
+            {} as Record<string, Permission[]>,
+          );
+        },
+        3600,
+      );
+    }
+
     const permissions = await this.getAllPermissions();
     return permissions.reduce(
       (acc, perm) => {
@@ -308,16 +348,33 @@ export class PermissionsService {
   }
 
   /**
-   * Limpia todo el caché (útil después de cambios de permisos masivos)
+   * Limpia todo el caché
    */
   clearCache(): void {
     this.permissionCache.clear();
+    if (this.cacheService) {
+      this.cacheService.invalidate('permissions:all');
+      this.cacheService.invalidate('permissions:by-resource');
+      this.cacheService.invalidate('roles:all');
+      this.cacheService.invalidate('users:all');
+    }
   }
 
   /**
    * Obtiene todos los usuarios con su rol
    */
   async getAllUsers(): Promise<User[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'users:all',
+        () =>
+          this.usersRepo.find({
+            relations: ['role'],
+            order: { email: 'ASC' },
+          }),
+        1800, // 30 minutos
+      );
+    }
     return this.usersRepo.find({
       relations: ['role'],
       order: { email: 'ASC' },
@@ -328,6 +385,16 @@ export class PermissionsService {
    * Obtiene todos los roles
    */
   async getAllRoles(): Promise<Role[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'roles:all',
+        () =>
+          this.rolesRepo.find({
+            order: { id: 'ASC' },
+          }),
+        3600,
+      );
+    }
     return this.rolesRepo.find({
       order: { id: 'ASC' },
     });
@@ -337,6 +404,20 @@ export class PermissionsService {
    * Obtiene los permisos de un rol específico
    */
   async getRolePermissions(roleId: number): Promise<Permission[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `role:${roleId}:permissions`,
+        async () => {
+          const rolePerms = await this.rolePermissionsRepo.find({
+            where: { role: { id: roleId } },
+            relations: ['permission'],
+          });
+          return rolePerms.map((rp) => rp.permission);
+        },
+        3600,
+      );
+    }
+
     const rolePerms = await this.rolePermissionsRepo.find({
       where: { role: { id: roleId } },
       relations: ['permission'],

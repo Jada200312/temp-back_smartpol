@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { CacheModule } from './common/cache/cache.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CorporationModule } from './modules/corporations/corporation.module';
 import { UserModule } from './modules/users/user.module';
@@ -45,6 +46,7 @@ import {
       isGlobal: true,
       envFilePath: '.env',
     }),
+    CacheModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST || 'localhost',
