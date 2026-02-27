@@ -99,6 +99,7 @@ export class Voter {
   })
   candidates: Candidate[];
 
+  // Mantener columna y relación para creador
   @Column({ nullable: true })
   createdByUserId: number;
 
@@ -108,11 +109,11 @@ export class Voter {
 
   @Column({ name: 'hasvoted', default: false })
   hasVoted: boolean;
+  // Mantener propiedad virtual de líderes
+  leaders?: Leader[] | null;
 
   @CreateDateColumn()
   createdAt: Date;
-
-  leaders?: Leader[] | null;
 
   @UpdateDateColumn()
   updatedAt: Date;
