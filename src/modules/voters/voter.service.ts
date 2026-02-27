@@ -2,6 +2,7 @@ import {
   Injectable,
   BadRequestException,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -22,6 +23,7 @@ import {
   PaginationQueryDto,
   PaginatedResponseDto,
 } from './dto/pagination-query.dto';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class VoterService {
@@ -42,6 +44,8 @@ export class VoterService {
     private readonly votingBoothRepository: Repository<VotingBooth>,
     @InjectRepository(VotersHistory)
     private readonly votersHistoryRepository: Repository<VotersHistory>,
+    @Optional()
+    private readonly cacheService?: CacheService,
   ) {}
 
   async create(
@@ -111,10 +115,32 @@ export class VoterService {
       ...createVoterDto,
       createdByUserId,
     });
-    return await this.voterRepository.save(voter);
+    const saved = await this.voterRepository.save(voter);
+
+    // 🔥 Invalidar cache cuando se crea nuevo votante
+    if (this.cacheService) {
+      try {
+        await this.cacheService.invalidateByPattern('voters:list:*');
+        await this.cacheService.invalidate('voters:all');
+      } catch (err) {
+        // Continuar si falla invalidación
+      }
+    }
+
+    return saved;
   }
 
   async findAll(): Promise<Voter[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'voters:all',
+        () =>
+          this.voterRepository.find({
+            relations: ['department', 'municipality', 'votingBooth'],
+          }),
+        600,
+      );
+    }
     return await this.voterRepository.find({
       relations: ['department', 'municipality', 'votingBooth'],
     });
@@ -124,27 +150,85 @@ export class VoterService {
     paginationQueryDto: PaginationQueryDto,
     user?: any,
   ): Promise<PaginatedResponseDto<Voter>> {
+    // Si no hay cacheService disponible, ejecutar sin caché
+    if (!this.cacheService) {
+      return this.executeVotersListQuery(paginationQueryDto, user);
+    }
+
+    // Generar cache key basado en paginación y organización
+    const cacheKey = this.generateVotersListCacheKey(paginationQueryDto, user);
+
+    // Usar CacheService con patrón: get(key, fn, ttl)
+    return await this.cacheService.get(
+      cacheKey,
+      () => this.executeVotersListQuery(paginationQueryDto, user),
+      600, // TTL en segundos
+    );
+  }
+
+  private generateVotersListCacheKey(
+    paginationQueryDto: PaginationQueryDto,
+    user?: any,
+  ): string {
+    const page = paginationQueryDto.page || 1;
+    const limit = paginationQueryDto.limit || 20;
+    const orgId = user?.organizationId || 'all';
+    return `voters:list:org=${orgId}:page=${page}:limit=${limit}`;
+  }
+
+  private async executeVotersListQuery(
+    paginationQueryDto: PaginationQueryDto,
+    user?: any,
+  ): Promise<PaginatedResponseDto<Voter>> {
     const { page = 1, limit = 20 } = paginationQueryDto;
     const skip = (page - 1) * limit;
 
-    // Build where clause
-    const where: any = {};
-
-    // If the user is a digitador (roleId = 5) or campaign admin (roleId = 2), filter by organization
+    // Si es digitador o admin de campaña, filtrar por organización
     if (
       user &&
       (user.roleId === 2 || user.roleId === 5) &&
       user.organizationId
     ) {
-      // Get all campaigns for this organization
-      const campaigns = await this.voterRepository.query(
-        'SELECT id FROM campaigns WHERE "organizationId" = $1',
+      // 🔧 OPTIMIZACIÓN: Una sola query que consolida las 3 fuentes con UNION
+      // Obtiene DISTINCT voter_id en una sola operación
+
+      const voterIdQuery = `
+        SELECT DISTINCT voter_id as id FROM (
+          -- 1. Votantes asignados a candidatos en esta organización
+          SELECT DISTINCT cv.voter_id 
+          FROM candidate_voter cv
+          INNER JOIN candidates c ON cv.candidate_id = c.id
+          INNER JOIN campaigns cam ON c."campaignId" = cam.id
+          WHERE cam."organizationId" = $1
+          
+          UNION ALL
+          
+          -- 2. Votantes asignados a líderes en esta organización
+          SELECT DISTINCT cv.voter_id 
+          FROM candidate_voter cv
+          INNER JOIN leaders l ON cv.leader_id = l.id
+          INNER JOIN campaigns cam ON l."campaignId" = cam.id
+          WHERE cam."organizationId" = $1
+          
+          UNION ALL
+          
+          -- 3. Votantes creados por digitadores de esta organización
+          SELECT DISTINCT v.id as voter_id
+          FROM voters v
+          INNER JOIN users u ON v."createdByUserId" = u.id
+          WHERE u."organizationId" = $1
+        ) unified_voters
+        ORDER BY id
+      `;
+
+      // Obtener total de IDs únicos
+      const totalResult = await this.voterRepository.query(
+        `SELECT COUNT(DISTINCT id) as count FROM (${voterIdQuery}) AS counted`,
         [user.organizationId],
       );
-      const campaignIds = campaigns.map((c) => c.id);
+      const total = parseInt(totalResult[0]?.count || '0');
 
-      // If no campaigns, return empty
-      if (campaignIds.length === 0) {
+      if (total === 0) {
         return {
           data: [],
           page,
@@ -156,137 +240,42 @@ export class VoterService {
         };
       }
 
-      // Get voter IDs from three sources using simpler approach
-      // 1. From candidates in these campaigns
-      const candidateVoterResults = await this.voterRepository.query(
-        `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "candidate_id" IN 
-         (SELECT id FROM candidates WHERE "campaignId" IN (${campaignIds.join(',')}))`,
+      // Obtener los IDs paginados
+      const paginatedIdResult = await this.voterRepository.query(
+        `${voterIdQuery} LIMIT $2 OFFSET $3`,
+        [user.organizationId, limit, skip],
       );
-      const candidateVoterIds = candidateVoterResults.map((r) => r.voter_id);
+      const paginatedIds = paginatedIdResult.map((r) => r.id);
 
-      // 2. From leaders in these campaigns
-      const leaderVoterResults = await this.voterRepository.query(
-        `SELECT DISTINCT "voter_id" FROM candidate_voter WHERE "leader_id" IN 
-         (SELECT id FROM leaders WHERE "campaignId" IN (${campaignIds.join(',')}))`,
-      );
-      const leaderVoterIds = leaderVoterResults.map((r) => r.voter_id);
-
-      // 3. From digitadores in this organization
-      const digitadorVoterResults = await this.voterRepository.query(
-        `SELECT DISTINCT id FROM voters WHERE "createdByUserId" IN 
-         (SELECT id FROM users WHERE "organizationId" = $1)`,
-        [user.organizationId],
-      );
-      const digitadorVoterIds = digitadorVoterResults.map((r) => r.id);
-
-      // Combine and deduplicate
-      const allVoterIds = [
-        ...new Set([
-          ...candidateVoterIds,
-          ...leaderVoterIds,
-          ...digitadorVoterIds,
-        ]),
-      ];
-
-      if (allVoterIds.length === 0) {
+      if (paginatedIds.length === 0) {
         return {
           data: [],
           page,
           limit,
-          total: 0,
-          pages: 0,
-          hasNextPage: false,
-          hasPreviousPage: false,
+          total,
+          pages: Math.ceil(total / limit),
+          hasNextPage: page < Math.ceil(total / limit),
+          hasPreviousPage: page > 1,
         };
       }
 
-      // Get paginated results
+      // Cargar voters con sus relaciones básicas
       const voters = await this.voterRepository.find({
-        where: { id: In(allVoterIds) },
-        skip,
-        take: limit,
+        where: { id: In(paginatedIds) },
         relations: ['department', 'municipality', 'votingBooth'],
       });
 
-      // Count total
-      const total = allVoterIds.length;
-
-      // Fetch candidates and leaders separately
-      const voterIds = voters.map((v) => v.id);
-      if (voterIds.length > 0) {
-        const candidateVoters = await this.candidateVoterRepository.find({
-          where: { voterId: In(voterIds) },
-          relations: ['candidate', 'leader'],
-        });
-
-        const candidateMap = new Map();
-        const leaderMap = new Map();
-
-        candidateVoters.forEach((cv) => {
-          if (!candidateMap.has(cv.voterId)) {
-            candidateMap.set(cv.voterId, []);
-          }
-          if (cv.candidate) {
-            candidateMap.get(cv.voterId).push(cv.candidate);
-          }
-
-          if (!leaderMap.has(cv.voterId)) {
-            leaderMap.set(cv.voterId, []);
-          }
-          if (cv.leader) {
-            leaderMap.get(cv.voterId).push(cv.leader);
-          }
-        });
-
-        voters.forEach((voter) => {
-          voter.candidates = candidateMap.get(voter.id) || [];
-          voter.leaders = leaderMap.get(voter.id) || [];
-        });
-      } else {
-        voters.forEach((voter) => {
-          voter.candidates = [];
-          voter.leaders = [];
-        });
-      }
-
-      const pages = Math.ceil(total / limit);
-      const hasNextPage = page < pages;
-      const hasPreviousPage = page > 1;
-
-      return {
-        data: voters,
-        page,
-        limit,
-        total,
-        pages,
-        hasNextPage,
-        hasPreviousPage,
-      };
-    }
-
-    // Fetch voters without many-to-many relations to avoid cartesian product issues with pagination
-    const [voters, total] = await this.voterRepository.findAndCount({
-      where,
-      skip,
-      take: limit,
-      relations: ['department', 'municipality', 'votingBooth'],
-    });
-
-    // Fetch candidates and leaders separately
-    const voterIds = voters.map((v) => v.id);
-    if (voterIds.length > 0) {
-      // Get candidates
+      // Cargar assignments (candidates y leaders) en una sola query
       const candidateVoters = await this.candidateVoterRepository.find({
-        where: { voterId: In(voterIds) },
+        where: { voterId: In(paginatedIds) },
         relations: ['candidate', 'leader'],
       });
 
-      // Group by voter
+      // Mapear assignments
       const candidateMap = new Map();
       const leaderMap = new Map();
 
       candidateVoters.forEach((cv) => {
-        // Map candidates
         if (!candidateMap.has(cv.voterId)) {
           candidateMap.set(cv.voterId, []);
         }
@@ -294,7 +283,6 @@ export class VoterService {
           candidateMap.get(cv.voterId).push(cv.candidate);
         }
 
-        // Map leaders
         if (!leaderMap.has(cv.voterId)) {
           leaderMap.set(cv.voterId, []);
         }
@@ -303,7 +291,59 @@ export class VoterService {
         }
       });
 
-      // Enrich voters with candidates and leaders
+      // Enriquecer voters
+      voters.forEach((voter) => {
+        voter.candidates = candidateMap.get(voter.id) || [];
+        voter.leaders = leaderMap.get(voter.id) || [];
+      });
+
+      const pages = Math.ceil(total / limit);
+
+      return {
+        data: voters,
+        page,
+        limit,
+        total,
+        pages,
+        hasNextPage: page < pages,
+        hasPreviousPage: page > 1,
+      };
+    }
+
+    // Para usuarios sin filtro organizacional, usar findAndCount directo
+    const [voters, total] = await this.voterRepository.findAndCount({
+      skip,
+      take: limit,
+      relations: ['department', 'municipality', 'votingBooth'],
+    });
+
+    // Cargar assignments
+    const voterIds = voters.map((v) => v.id);
+    if (voterIds.length > 0) {
+      const candidateVoters = await this.candidateVoterRepository.find({
+        where: { voterId: In(voterIds) },
+        relations: ['candidate', 'leader'],
+      });
+
+      const candidateMap = new Map();
+      const leaderMap = new Map();
+
+      candidateVoters.forEach((cv) => {
+        if (!candidateMap.has(cv.voterId)) {
+          candidateMap.set(cv.voterId, []);
+        }
+        if (cv.candidate) {
+          candidateMap.get(cv.voterId).push(cv.candidate);
+        }
+
+        if (!leaderMap.has(cv.voterId)) {
+          leaderMap.set(cv.voterId, []);
+        }
+        if (cv.leader) {
+          leaderMap.get(cv.voterId).push(cv.leader);
+        }
+      });
+
       voters.forEach((voter) => {
         voter.candidates = candidateMap.get(voter.id) || [];
         voter.leaders = leaderMap.get(voter.id) || [];
@@ -774,6 +814,17 @@ export class VoterService {
   }
 
   async findOne(id: number): Promise<Voter> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `voters:${id}`,
+        () => this.executeFindOne(id),
+        600,
+      );
+    }
+    return await this.executeFindOne(id);
+  }
+
+  private async executeFindOne(id: number): Promise<Voter> {
     const voter = await this.voterRepository.findOne({
       where: { id },
     });
@@ -786,6 +837,17 @@ export class VoterService {
   }
 
   async findByIdentification(identification: string): Promise<Voter | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `voters:identification:${identification}`,
+        () =>
+          this.voterRepository.findOne({
+            where: { identification },
+            select: ['id', 'identification', 'firstName', 'lastName'],
+          }),
+        600,
+      );
+    }
     const voter = await this.voterRepository.findOne({
       where: { identification },
       select: ['id', 'identification', 'firstName', 'lastName'],
@@ -795,69 +857,115 @@ export class VoterService {
   }
 
   async update(id: number, updateVoterDto: UpdateVoterDto): Promise<Voter> {
-    // Obtén el votante actual
     const voter = await this.voterRepository.findOneBy({ id });
 
     if (!voter) {
       throw new NotFoundException(`Votante con ID ${id} no encontrado`);
     }
 
-    // Si se intenta actualizar identification, verifica que no exista en otro votante
+    // Validaciones en BATCH (no N+1)
+    const validationQueries: Promise<any>[] = [];
+
+    // Validar identification si se actualiza
     if (
       updateVoterDto.identification &&
       updateVoterDto.identification !== voter.identification
     ) {
-      const existingIdentification = await this.voterRepository.findOneBy({
-        identification: updateVoterDto.identification,
-      });
+      validationQueries.push(
+        this.voterRepository.findOneBy({
+          identification: updateVoterDto.identification,
+        }),
+      );
+    }
+
+    // Validar email si se actualiza
+    if (updateVoterDto.email && updateVoterDto.email !== voter.email) {
+      validationQueries.push(
+        this.voterRepository.findOneBy({
+          email: updateVoterDto.email,
+        }),
+      );
+    }
+
+    // Validar departamento si se actualiza
+    if (updateVoterDto.departmentId) {
+      validationQueries.push(
+        this.departmentRepository.findOneBy({
+          id: updateVoterDto.departmentId,
+        }),
+      );
+    }
+
+    // Validar municipio si se actualiza
+    if (updateVoterDto.municipalityId) {
+      validationQueries.push(
+        this.municipalityRepository.findOneBy({
+          id: updateVoterDto.municipalityId,
+        }),
+      );
+    }
+
+    // Validar puesto de votación si se actualiza
+    if (updateVoterDto.votingBoothId) {
+      validationQueries.push(
+        this.votingBoothRepository.findOneBy({
+          id: updateVoterDto.votingBoothId,
+        }),
+      );
+    }
+
+    // Ejecutar todas las validaciones en paralelo
+    const [
+      existingIdentification,
+      existingEmail,
+      department,
+      municipality,
+      votingBooth,
+    ] = await Promise.all(validationQueries);
+
+    // Checking resultados
+    let queryIndex = 0;
+
+    if (
+      updateVoterDto.identification &&
+      updateVoterDto.identification !== voter.identification
+    ) {
       if (existingIdentification) {
         throw new BadRequestException(
           `La identificación ${updateVoterDto.identification} ya existe`,
         );
       }
+      queryIndex++;
     }
 
-    // Si se intenta actualizar email, verifica que no exista en otro votante
     if (updateVoterDto.email && updateVoterDto.email !== voter.email) {
-      const existingEmail = await this.voterRepository.findOneBy({
-        email: updateVoterDto.email,
-      });
       if (existingEmail) {
         throw new BadRequestException(
           `El email ${updateVoterDto.email} ya existe`,
         );
       }
+      queryIndex++;
     }
 
-    // Validar que el departamento existe si se actualiza
     if (updateVoterDto.departmentId) {
-      const department = await this.departmentRepository.findOneBy({
-        id: updateVoterDto.departmentId,
-      });
       if (!department) {
         throw new BadRequestException(
           `Departamento con ID ${updateVoterDto.departmentId} no encontrado`,
         );
       }
+      queryIndex++;
     }
 
-    // Validar que el municipio existe si se actualiza
     if (updateVoterDto.municipalityId) {
-      const municipality = await this.municipalityRepository.findOneBy({
-        id: updateVoterDto.municipalityId,
-      });
       if (!municipality) {
         throw new BadRequestException(
           `Municipio con ID ${updateVoterDto.municipalityId} no encontrado`,
         );
       }
+      queryIndex++;
     }
 
-    // Validar que el puesto de votación existe si se actualiza
     if (updateVoterDto.votingBoothId) {
-      const votingBooth = await this.votingBoothRepository.findOneBy({
-        id: updateVoterDto.votingBoothId,
-      });
       if (!votingBooth) {
         throw new BadRequestException(
           `Puesto de votación con ID ${updateVoterDto.votingBoothId} no encontrado`,
@@ -865,8 +973,20 @@ export class VoterService {
       }
     }
 
-    // Actualiza todos los campos
+    // Actualizar votante
     await this.voterRepository.update(id, updateVoterDto);
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`voters:${id}`);
+      await this.cacheService.invalidate('voters:all');
+      await this.cacheService.invalidateByPattern('voters:identification:*');
+      // 🔥 Invalidar listados cuando se actualiza votante
+      await this.cacheService.invalidateByPattern('voters:list:*');
+      // También invalidar reportes y estadísticas
+      await this.cacheService.invalidateByPattern('report:voters:*');
+      await this.cacheService.invalidateByPattern('stats:voting:*');
+    }
+
     return await this.findOneWithAllRelations(id);
   }
 
@@ -882,6 +1002,17 @@ export class VoterService {
 
     // Ahora sí puedes borrar el votante
     await this.voterRepository.delete(id);
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`voters:${id}`);
+      await this.cacheService.invalidate('voters:all');
+      await this.cacheService.invalidateByPattern('voters:identification:*');
+      // 🔥 Invalidar listados cuando se elimina votante
+      await this.cacheService.invalidateByPattern('voters:list:*');
+      // Invalidar reportes y estadísticas al eliminar votante
+      await this.cacheService.invalidateByPattern('report:voters:*');
+      await this.cacheService.invalidateByPattern('stats:voting:*');
+    }
   }
 
   async assignCandidate(voterId: number, candidateId: number): Promise<Voter> {
@@ -905,7 +1036,20 @@ export class VoterService {
     }
 
     voter.candidates.push(candidate);
-    return await this.voterRepository.save(voter);
+    const saved = await this.voterRepository.save(voter);
+
+    // 🔥 Invalidar caché cuando se asigna candidato
+    if (this.cacheService) {
+      try {
+        await this.cacheService.invalidateByPattern('voters:list:*');
+        await this.cacheService.invalidateByPattern('report:voters:*');
+        await this.cacheService.invalidateByPattern('stats:voting:*');
+      } catch (err) {
+        // Continuar si falla invalidación
+      }
+    }
+
+    return saved;
   }
 
   async getAssignedCandidates(voterId: number): Promise<CandidateVoter[]> {
@@ -933,10 +1077,15 @@ export class VoterService {
       throw new NotFoundException(`Votante con ID ${voterId} no encontrado`);
     }
 
-    // Validar que el líder existe
-    const leader = await this.leaderRepository.findOneBy({
-      id: assignCandidateDto.leader_id,
-    });
+    // Validar que el líder existe y todos los candidatos en batch (no N+1)
+    const [leader, candidates] = await Promise.all([
+      this.leaderRepository.findOneBy({
+        id: assignCandidateDto.leader_id,
+      }),
+      this.candidateRepository.find({
+        where: { id: In(assignCandidateDto.candidate_ids) },
+      }),
+    ]);
 
     if (!leader) {
       throw new NotFoundException(
@@ -944,35 +1093,28 @@ export class VoterService {
       );
     }
 
-    // Validar que todos los candidatos existen
-    for (const candidateId of assignCandidateDto.candidate_ids) {
-      const candidate = await this.candidateRepository.findOneBy({
-        id: candidateId,
-      });
-
-      if (!candidate) {
-        throw new NotFoundException(
-          `Candidato con ID ${candidateId} no encontrado`,
-        );
-      }
+    if (candidates.length !== assignCandidateDto.candidate_ids.length) {
+      const foundIds = candidates.map((c) => c.id);
+      const missingId = assignCandidateDto.candidate_ids.find(
+        (id) => !foundIds.includes(id),
+      );
+      throw new NotFoundException(
+        `Candidato con ID ${missingId} no encontrado`,
+      );
     }
 
     // Eliminar asignaciones previas para este votante
     await this.candidateVoterRepository.delete({ voterId });
 
-    // Crear nuevas asignaciones
-    for (const candidateId of assignCandidateDto.candidate_ids) {
-      await this.candidateVoterRepository
-        .createQueryBuilder()
-        .insert()
-        .into(CandidateVoter)
-        .values({
-          voterId,
-          candidateId,
-          leaderId: assignCandidateDto.leader_id,
-        })
-        .execute();
-    }
+    // Crear nuevas asignaciones en BATCH (1 query en lugar de N queries)
+    const valuesToInsert = assignCandidateDto.candidate_ids.map(
+      (candidateId) => ({
+        voterId,
+        candidateId,
+        leaderId: assignCandidateDto.leader_id,
+      }),
+    );
+    await this.candidateVoterRepository.insert(valuesToInsert);
 
     // Retornar las asignaciones actualizado con las relaciones
     const results = await this.candidateVoterRepository.find({
@@ -984,6 +1126,12 @@ export class VoterService {
       throw new BadRequestException(
         'Error al recuperar las asignaciones creadas',
       );
+    }
+
+    // Invalidar caché de reportes y estadísticas al asignar candidatos
+    if (this.cacheService) {
+      await this.cacheService.invalidateByPattern('report:voters:*');
+      await this.cacheService.invalidateByPattern('stats:voting:*');
     }
 
     return results;
@@ -1000,7 +1148,180 @@ export class VoterService {
     pages: number;
     aggregations: any;
   }> {
-    let query = this.candidateVoterRepository
+    // Crear clave de caché basada en filtros y usuario (sin paginación para evitar fragmentación)
+    const cacheKey = this.generateReportCacheKey(filters, user);
+
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        cacheKey,
+        () => this.executeVoterReport(filters, user),
+        300, // 5 minutos - reportes pueden ser menos frescos
+      );
+    }
+
+    return await this.executeVoterReport(filters, user);
+  }
+
+  private generateReportCacheKey(filters: any, user?: any): string {
+    const filterKey = Object.entries(filters)
+      .filter(([key]) => key !== 'page' && key !== 'limit') // Excluir paginación
+      .map(([key, value]) => `${key}:${value}`)
+      .join('|');
+
+    const orgKey = user?.organizationId
+      ? `org:${user.organizationId}`
+      : 'org:all';
+    return `report:voters:${orgKey}:${filterKey || 'all'}`;
+  }
+
+  private async executeVoterReport(
+    filters: VoterReportFilterDto,
+    user?: any,
+  ): Promise<{
+    data: VoterReportDto[];
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+    aggregations: any;
+  }> {
+    // 🔧 OPTIMIZACIÓN: Usar subquery para DISTINCT voter IDs primero
+    // Esto evita cargar 7K+ votantes en RAM, solo filtra IDs únicos en DB
+
+    let voterIdQuery = this.candidateVoterRepository
+      .createQueryBuilder('cv')
+      .select('DISTINCT voter.id', 'voterId')
+      .leftJoin('cv.voter', 'voter')
+      .leftJoin('cv.candidate', 'candidate')
+      .leftJoin('candidate.campaign', 'campaign')
+      .leftJoin('candidate.corporation', 'corporation');
+
+    // Aplicar filtros organizacionales
+    if (user && user.organizationId) {
+      voterIdQuery = voterIdQuery.andWhere(
+        'campaign.organizationId = :organizationId',
+        {
+          organizationId: user.organizationId,
+        },
+      );
+    }
+
+    // Aplicar filtros de datos
+    if (filters.gender) {
+      voterIdQuery = voterIdQuery.andWhere('voter.gender = :gender', {
+        gender: filters.gender,
+      });
+    }
+
+    if (filters.leaderId) {
+      const leaderId = parseInt(filters.leaderId as any);
+      if (!isNaN(leaderId) && leaderId > 0) {
+        voterIdQuery = voterIdQuery.andWhere('cv.leaderId = :leaderId', {
+          leaderId,
+        });
+      }
+    }
+
+    if (filters.candidateId) {
+      const candidateId = parseInt(filters.candidateId as any);
+      if (!isNaN(candidateId) && candidateId > 0) {
+        voterIdQuery = voterIdQuery.andWhere('cv.candidateId = :candidateId', {
+          candidateId,
+        });
+      }
+    }
+
+    if (filters.corporationId) {
+      const corporationId = parseInt(filters.corporationId as any);
+      if (!isNaN(corporationId) && corporationId > 0) {
+        voterIdQuery = voterIdQuery.andWhere(
+          'corporation.id = :corporationId',
+          {
+            corporationId,
+          },
+        );
+      }
+    }
+
+    if (filters.departmentId) {
+      const departmentId = parseInt(filters.departmentId as any);
+      if (!isNaN(departmentId) && departmentId > 0) {
+        voterIdQuery = voterIdQuery.andWhere(
+          'voter.departmentId = :departmentId',
+          {
+            departmentId,
+          },
+        );
+      }
+    }
+
+    if (filters.municipalityId) {
+      const municipalityId = parseInt(filters.municipalityId as any);
+      if (!isNaN(municipalityId) && municipalityId > 0) {
+        voterIdQuery = voterIdQuery.andWhere(
+          'voter.municipalityId = :municipalityId',
+          {
+            municipalityId,
+          },
+        );
+      }
+    }
+
+    if (filters.votingBoothId) {
+      const votingBoothId = parseInt(filters.votingBoothId as any);
+      if (!isNaN(votingBoothId) && votingBoothId > 0) {
+        voterIdQuery = voterIdQuery.andWhere(
+          'voter.votingBoothId = :votingBoothId',
+          {
+            votingBoothId,
+          },
+        );
+      }
+    }
+
+    if (filters.votingTableId) {
+      const votingTableId = String(filters.votingTableId).trim();
+      if (votingTableId) {
+        voterIdQuery = voterIdQuery.andWhere(
+          'voter.votingTableId = :votingTableId',
+          {
+            votingTableId,
+          },
+        );
+      }
+    }
+
+    // PASO 1: Obtener IDs únicos de votantes (sin paginación, para contar total)
+    const allVoterIds = await voterIdQuery.getRawMany();
+    const totalCount = allVoterIds.length;
+
+    // PASO 2: Paginar IDs
+    const page = Math.max(1, parseInt(filters.page as any) || 1);
+    const limit = Math.max(
+      1,
+      Math.min(parseInt(filters.limit as any) || 20, 100),
+    );
+    const skip = (page - 1) * limit;
+
+    const paginatedVoterIds = allVoterIds
+      .slice(skip, skip + limit)
+      .map((row) => row.voterId);
+
+    // PASO 3: Si no hay votantes, retornar vacío
+    if (paginatedVoterIds.length === 0) {
+      const aggregations = await this.getAggregations(filters, user);
+      return {
+        data: [],
+        page,
+        limit,
+        total: totalCount,
+        pages: Math.ceil(totalCount / limit),
+        aggregations,
+      };
+    }
+
+    // PASO 4: Cargar relaciones solo para votantes paginados
+    let detailQuery = this.candidateVoterRepository
       .createQueryBuilder('cv')
       .leftJoinAndSelect('cv.voter', 'voter')
       .leftJoinAndSelect('voter.department', 'department')
@@ -1010,91 +1331,15 @@ export class VoterService {
       .leftJoinAndSelect('candidate.corporation', 'corporation')
       .leftJoinAndSelect('candidate.campaign', 'campaign')
       .leftJoinAndSelect('campaign.organization', 'organization')
-      .leftJoinAndSelect('cv.leader', 'leader');
+      .leftJoinAndSelect('cv.leader', 'leader')
+      .where('voter.id IN (:...voterIds)', { voterIds: paginatedVoterIds });
 
-    // Filter by user's organization
-    // This applies to: campaign admins (roleId=2) and digitadores (roleId=5)
-    if (user && user.organizationId) {
-      query = query.andWhere('campaign.organizationId = :organizationId', {
-        organizationId: user.organizationId,
-      });
-    }
+    const detailResults = await detailQuery.getMany();
 
-    // Aplicar filtros
-    if (filters.gender) {
-      query = query.andWhere('voter.gender = :gender', {
-        gender: filters.gender,
-      });
-    }
-
-    if (filters.leaderId) {
-      const leaderId = parseInt(filters.leaderId as any);
-      if (!isNaN(leaderId) && leaderId > 0) {
-        query = query.andWhere('cv.leaderId = :leaderId', { leaderId });
-      }
-    }
-
-    if (filters.candidateId) {
-      const candidateId = parseInt(filters.candidateId as any);
-      if (!isNaN(candidateId) && candidateId > 0) {
-        query = query.andWhere('cv.candidateId = :candidateId', {
-          candidateId,
-        });
-      }
-    }
-
-    if (filters.corporationId) {
-      const corporationId = parseInt(filters.corporationId as any);
-      if (!isNaN(corporationId) && corporationId > 0) {
-        query = query.andWhere('candidate.corporation_id = :corporationId', {
-          corporationId,
-        });
-      }
-    }
-
-    if (filters.departmentId) {
-      const departmentId = parseInt(filters.departmentId as any);
-      if (!isNaN(departmentId) && departmentId > 0) {
-        query = query.andWhere('voter.departmentId = :departmentId', {
-          departmentId,
-        });
-      }
-    }
-
-    if (filters.municipalityId) {
-      const municipalityId = parseInt(filters.municipalityId as any);
-      if (!isNaN(municipalityId) && municipalityId > 0) {
-        query = query.andWhere('voter.municipalityId = :municipalityId', {
-          municipalityId,
-        });
-      }
-    }
-
-    if (filters.votingBoothId) {
-      const votingBoothId = parseInt(filters.votingBoothId as any);
-      if (!isNaN(votingBoothId) && votingBoothId > 0) {
-        query = query.andWhere('voter.votingBoothId = :votingBoothId', {
-          votingBoothId,
-        });
-      }
-    }
-
-    if (filters.votingTableId) {
-      const votingTableId = String(filters.votingTableId).trim();
-      if (votingTableId) {
-        query = query.andWhere('voter.votingTableId = :votingTableId', {
-          votingTableId,
-        });
-      }
-    }
-
-    // Obtener TODOS los resultados sin paginación para agrupar correctamente
-    const allResults = await query.getMany();
-
-    // Agrupar resultados por votante para evitar duplicados
+    // PASO 5: Agrupar resultados por votante
     const votersMap = new Map<number, VoterReportDto>();
 
-    allResults.forEach((assignment) => {
+    detailResults.forEach((assignment) => {
       const voterId = assignment.voter.id;
       if (!votersMap.has(voterId)) {
         votersMap.set(voterId, {
@@ -1175,16 +1420,7 @@ export class VoterService {
       }
     });
 
-    // Convertir el mapa a array y aplicar paginación sobre votantes únicos
-    const uniqueVoters = Array.from(votersMap.values());
-    const total = uniqueVoters.length;
-
-    // Aplicar paginación de votantes (20 por página por defecto)
-    const page = Math.max(1, parseInt(filters.page as any) || 1);
-    const limit = Math.max(1, parseInt(filters.limit as any) || 20);
-    const skip = (page - 1) * limit;
-
-    const paginatedVoters = uniqueVoters.slice(skip, skip + limit);
+    const paginatedVoters = Array.from(votersMap.values());
 
     // Obtener agregaciones
     const aggregations = await this.getAggregations(filters, user);
@@ -1193,8 +1429,8 @@ export class VoterService {
       data: paginatedVoters,
       page,
       limit,
-      total: total,
-      pages: Math.ceil(total / limit),
+      total: totalCount,
+      pages: Math.ceil(totalCount / limit),
       aggregations,
     };
   }
@@ -1585,7 +1821,21 @@ export class VoterService {
 
     // Register the vote
     voter.hasVoted = true;
-    return await this.voterRepository.save(voter);
+    const saved = await this.voterRepository.save(voter);
+
+    // 🔥 Invalidar caché cuando se registra voto
+    if (this.cacheService) {
+      try {
+        await this.cacheService.invalidateByPattern('voters:list:*');
+        await this.cacheService.invalidateByPattern('voters:identification:*');
+        await this.cacheService.invalidateByPattern('report:voters:*');
+        await this.cacheService.invalidateByPattern('stats:voting:*');
+      } catch (err) {
+        // Continuar si falla invalidación
+      }
+    }
+
+    return saved;
   }
 
   async unregisterVote(identification: string, user: any): Promise<Voter> {
@@ -1609,10 +1859,45 @@ export class VoterService {
 
     // Unregister the vote (set hasVoted to false)
     voter.hasVoted = false;
-    return await this.voterRepository.save(voter);
+    const saved = await this.voterRepository.save(voter);
+
+    // 🔥 Invalidar caché cuando se desregistra voto
+    if (this.cacheService) {
+      try {
+        await this.cacheService.invalidateByPattern('voters:list:*');
+        await this.cacheService.invalidateByPattern('voters:identification:*');
+        await this.cacheService.invalidateByPattern('report:voters:*');
+        await this.cacheService.invalidateByPattern('stats:voting:*');
+      } catch (err) {
+        // Continuar si falla invalidación
+      }
+    }
+
+    return saved;
   }
 
   async getVotingStats(user: any): Promise<{
+    expected: number;
+    registered: number;
+    pending: number;
+  }> {
+    // Crear clave de caché basada en organización del usuario
+    const cacheKey = user?.organizationId
+      ? `stats:voting:org:${user.organizationId}`
+      : 'stats:voting:all';
+
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        cacheKey,
+        () => this.executeVotingStats(user),
+        120, // 2 minutos - estadísticas en tiempo casi real
+      );
+    }
+
+    return await this.executeVotingStats(user);
+  }
+
+  private async executeVotingStats(user: any): Promise<{
     expected: number;
     registered: number;
     pending: number;

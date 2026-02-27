@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -13,6 +14,7 @@ import { CreateCandidateDto } from './dto/create-candidate.dto';
 import { UpdateCandidateDto } from './dto/update-candidate.dto';
 import { Campaign } from 'src/database/entities';
 import { UserService } from '../users/user.service';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class CandidateService {
@@ -26,6 +28,8 @@ export class CandidateService {
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
     private readonly userService: UserService,
+    @Optional()
+    private readonly cacheService?: CacheService,
   ) {}
 
   async create(
@@ -95,8 +99,18 @@ export class CandidateService {
       userId,
       campaignId,
     });
-
     const savedCandidate = await this.candidateRepository.save(candidate);
+
+    // Invalidar cache
+    if (this.cacheService) {
+      await this.cacheService.invalidate('candidates:all');
+      if (userId) {
+        await this.cacheService.invalidate(`candidate:user:${userId}`);
+      }
+      if (campaignId) {
+        await this.cacheService.invalidate(`candidates:campaign:${campaignId}`);
+      }
+    }
 
     // Retornar el candidato encontrado, garantizando que existe
     const foundCandidate = await this.findOne(savedCandidate.id);
@@ -109,6 +123,16 @@ export class CandidateService {
   }
 
   async findAll(): Promise<Candidate[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'candidates:all',
+        () =>
+          this.candidateRepository.find({
+            relations: ['corporation', 'campaign', 'user'],
+          }),
+        1800, // 30 minutos
+      );
+    }
     return await this.candidateRepository.find({
       relations: ['corporation', 'campaign', 'user'],
     });
@@ -168,6 +192,17 @@ export class CandidateService {
   }
 
   async findOne(id: number): Promise<Candidate | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `candidate:${id}`,
+        () =>
+          this.candidateRepository.findOne({
+            where: { id },
+            relations: ['corporation', 'leaders', 'campaign', 'user'],
+          }),
+        1800,
+      );
+    }
     return await this.candidateRepository.findOne({
       where: { id },
       relations: ['corporation', 'leaders', 'campaign', 'user'],
@@ -175,6 +210,17 @@ export class CandidateService {
   }
 
   async findByUserId(userId: number): Promise<Candidate | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `candidate:user:${userId}`,
+        () =>
+          this.candidateRepository.findOne({
+            where: { userId },
+            relations: ['corporation', 'leaders', 'campaign', 'user'],
+          }),
+        1800,
+      );
+    }
     return await this.candidateRepository.findOne({
       where: { userId },
       relations: ['corporation', 'leaders', 'campaign', 'user'],
@@ -182,6 +228,18 @@ export class CandidateService {
   }
 
   async findByCampaignIds(campaignIds: number[]): Promise<Candidate[]> {
+    if (this.cacheService) {
+      const cacheKey = `candidates:campaign:${campaignIds.join(',')}`;
+      return await this.cacheService.get(
+        cacheKey,
+        () =>
+          this.candidateRepository.find({
+            where: { campaignId: In(campaignIds) },
+            relations: ['corporation', 'leaders', 'campaign', 'user'],
+          }),
+        1800,
+      );
+    }
     return await this.candidateRepository.find({
       where: { campaignId: In(campaignIds) },
       relations: ['corporation', 'leaders', 'campaign', 'user'],
@@ -233,6 +291,25 @@ export class CandidateService {
       ...(campaignId && { campaignId }),
     });
 
+    // Invalidar cache
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`candidate:${id}`);
+      await this.cacheService.invalidate('candidates:all');
+      if (candidate.userId) {
+        await this.cacheService.invalidate(
+          `candidate:user:${candidate.userId}`,
+        );
+      }
+      if (candidate.campaignId) {
+        await this.cacheService.invalidate(
+          `candidates:campaign:${candidate.campaignId}`,
+        );
+      }
+      if (campaignId && campaignId !== candidate.campaignId) {
+        await this.cacheService.invalidate(`candidates:campaign:${campaignId}`);
+      }
+    }
+
     return await this.findOne(id);
   }
 
@@ -243,6 +320,22 @@ export class CandidateService {
     });
 
     if (candidate) {
+      // Invalidar cache antes de eliminar
+      if (this.cacheService) {
+        await this.cacheService.invalidate(`candidate:${id}`);
+        await this.cacheService.invalidate('candidates:all');
+        if (candidate.userId) {
+          await this.cacheService.invalidate(
+            `candidate:user:${candidate.userId}`,
+          );
+        }
+        if (candidate.campaignId) {
+          await this.cacheService.invalidate(
+            `candidates:campaign:${candidate.campaignId}`,
+          );
+        }
+      }
+
       if (candidate.userId) {
         await this.userRepository.delete(candidate.userId);
       }

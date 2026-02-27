@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -15,6 +16,7 @@ import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { CreateOrganizationWithAdminDto } from './dto/create-organization-with-admin.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class OrganizationsService {
@@ -33,13 +35,21 @@ export class OrganizationsService {
     private campaignUserRepository: Repository<CampaignUser>,
     @InjectRepository(CandidateVoter)
     private candidateVoterRepository: Repository<CandidateVoter>,
+    @Optional()
+    private readonly cacheService?: CacheService,
   ) {}
 
   async create(createOrganizationDto: CreateOrganizationDto) {
     const organization = this.organizationsRepository.create(
       createOrganizationDto,
     );
-    return await this.organizationsRepository.save(organization);
+    const result = await this.organizationsRepository.save(organization);
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate('organizations:all');
+    }
+
+    return result;
   }
 
   async createOrganizationWithAdmin(
@@ -92,6 +102,10 @@ export class OrganizationsService {
 
       console.log('Admin usuario creado:', savedAdmin.id); // DEBUG
 
+      if (this.cacheService) {
+        await this.cacheService.invalidate('organizations:all');
+      }
+
       return {
         organization: savedOrganization,
         admin: {
@@ -108,6 +122,21 @@ export class OrganizationsService {
   }
 
   async findAll(page: number = 1, limit: number = 10, search?: string) {
+    if (this.cacheService && !search) {
+      return await this.cacheService.get(
+        `organizations:list:${page}:${limit}`,
+        () => this.executeFindAll(page, limit, search),
+        3600,
+      );
+    }
+    return await this.executeFindAll(page, limit, search);
+  }
+
+  private async executeFindAll(
+    page: number = 1,
+    limit: number = 10,
+    search?: string,
+  ) {
     const query =
       this.organizationsRepository.createQueryBuilder('organization');
 
@@ -136,6 +165,17 @@ export class OrganizationsService {
   }
 
   async findOne(id: number) {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `organizations:${id}`,
+        () => this.executeFindOne(id),
+        3600,
+      );
+    }
+    return await this.executeFindOne(id);
+  }
+
+  private async executeFindOne(id: number) {
     const organization = await this.organizationsRepository.findOne({
       where: { id },
       relations: ['campaigns', 'users'],
@@ -151,7 +191,14 @@ export class OrganizationsService {
   async update(id: number, updateOrganizationDto: UpdateOrganizationDto) {
     const organization = await this.findOne(id);
     Object.assign(organization, updateOrganizationDto);
-    return await this.organizationsRepository.save(organization);
+    const result = await this.organizationsRepository.save(organization);
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`organizations:${id}`);
+      await this.cacheService.invalidateByPattern('organizations:list:*');
+    }
+
+    return result;
   }
 
   async remove(id: number) {
@@ -224,7 +271,14 @@ export class OrganizationsService {
       }
 
       // 10. Finalmente, eliminar la organización
-      return await this.organizationsRepository.remove(organization);
+      const result = await this.organizationsRepository.remove(organization);
+
+      if (this.cacheService) {
+        await this.cacheService.invalidate(`organizations:${id}`);
+        await this.cacheService.invalidateByPattern('organizations:list:*');
+      }
+
+      return result;
     } catch (error) {
       throw new BadRequestException(
         `Error al eliminar la organización: ${error.message}`,

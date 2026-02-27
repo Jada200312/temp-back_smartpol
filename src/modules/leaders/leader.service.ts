@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,6 +13,7 @@ import { Campaign } from '../../database/entities/campaigns.entity';
 import { CreateLeaderDto } from './dto/create-leader.dto';
 import { UpdateLeaderDto } from './dto/update-leader.dto';
 import { UserService } from '../users/user.service';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class LeaderService {
@@ -25,6 +27,8 @@ export class LeaderService {
     @InjectRepository(Campaign)
     private readonly campaignRepository: Repository<Campaign>,
     private readonly userService: UserService,
+    @Optional()
+    private readonly cacheService?: CacheService,
   ) {}
 
   async create(
@@ -62,6 +66,16 @@ export class LeaderService {
   }
 
   async findAll(): Promise<Leader[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'leaders:all',
+        () =>
+          this.leaderRepository.find({
+            relations: ['campaign', 'candidates', 'user'],
+          }),
+        1800,
+      );
+    }
     return await this.leaderRepository.find({
       relations: ['campaign', 'candidates', 'user'],
     });
@@ -118,6 +132,19 @@ export class LeaderService {
     if (!campaignId || isNaN(campaignId) || campaignId <= 0) {
       throw new BadRequestException(
         'campaignId debe ser un número positivo válido',
+      );
+    }
+
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `leaders:campaign:${campaignId}`,
+        () =>
+          this.leaderRepository.find({
+            where: { campaignId },
+            relations: ['campaign', 'candidates', 'user'],
+            order: { createdAt: 'DESC' },
+          }),
+        1800,
       );
     }
 
@@ -178,6 +205,17 @@ export class LeaderService {
   }
 
   async findOne(id: number): Promise<Leader | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `leader:${id}`,
+        () =>
+          this.leaderRepository.findOne({
+            where: { id },
+            relations: ['campaign', 'candidates', 'user'],
+          }),
+        1800,
+      );
+    }
     return await this.leaderRepository.findOne({
       where: { id },
       relations: ['campaign', 'candidates', 'user'],
@@ -185,6 +223,17 @@ export class LeaderService {
   }
 
   async findByUserId(userId: number): Promise<Leader | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `leader:user:${userId}`,
+        () =>
+          this.leaderRepository.findOne({
+            where: { userId },
+            relations: ['campaign', 'candidates', 'user'],
+          }),
+        1800,
+      );
+    }
     return await this.leaderRepository.findOne({
       where: { userId },
       relations: ['campaign', 'candidates', 'user'],
@@ -212,6 +261,20 @@ export class LeaderService {
     }
 
     await this.leaderRepository.update(id, updateData);
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`leader:${id}`);
+      await this.cacheService.invalidate('leaders:all');
+      if (leader.campaignId) {
+        await this.cacheService.invalidate(
+          `leaders:campaign:${leader.campaignId}`,
+        );
+      }
+      if (leader.userId) {
+        await this.cacheService.invalidate(`leader:user:${leader.userId}`);
+      }
+    }
+
     return await this.findOne(id);
   }
 
@@ -222,6 +285,19 @@ export class LeaderService {
     });
 
     if (leader) {
+      if (this.cacheService) {
+        await this.cacheService.invalidate(`leader:${id}`);
+        await this.cacheService.invalidate('leaders:all');
+        if (leader.campaignId) {
+          await this.cacheService.invalidate(
+            `leaders:campaign:${leader.campaignId}`,
+          );
+        }
+        if (leader.userId) {
+          await this.cacheService.invalidate(`leader:user:${leader.userId}`);
+        }
+      }
+
       if (leader.userId) {
         // ✅ Al eliminar el usuario, se pierden todos sus datos incluyendo organizationId
         await this.userRepository.delete(leader.userId);

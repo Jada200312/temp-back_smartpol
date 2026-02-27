@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   BadRequestException,
   InternalServerErrorException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +15,7 @@ import { Candidate } from '../../database/entities/candidate.entity';
 import { Leader } from '../../database/entities/leader.entity';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { UpdateCampaignDto } from './dto/update-campaign.dto';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class CampaignsService {
@@ -26,6 +28,8 @@ export class CampaignsService {
     private candidateRepository: Repository<Candidate>,
     @InjectRepository(Leader)
     private leaderRepository: Repository<Leader>,
+    @Optional()
+    private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -83,6 +87,10 @@ export class CampaignsService {
       await this.assignUsersTooCampaign(campaignId, userIds, currentUser);
     }
 
+    if (this.cacheService) {
+      await this.cacheService.invalidateByPattern('campaigns:*');
+    }
+
     return await this.findOneBasic(campaignId, currentUser);
   }
 
@@ -91,6 +99,25 @@ export class CampaignsService {
    * ✅ FILTRA AUTOMÁTICAMENTE POR ORGANIZACIÓN DEL USUARIO
    */
   async findAll(
+    currentUser: User,
+    page: number = 1,
+    limit: number = 10,
+    search: string = '',
+  ) {
+    if (this.cacheService && !search) {
+      const cacheKey = currentUser.organizationId
+        ? `campaigns:org:${currentUser.organizationId}:${page}:${limit}`
+        : `campaigns:all:${page}:${limit}`;
+      return await this.cacheService.get(
+        cacheKey,
+        () => this.executeFindAll(currentUser, page, limit, search),
+        1800,
+      );
+    }
+    return await this.executeFindAll(currentUser, page, limit, search);
+  }
+
+  private async executeFindAll(
     currentUser: User,
     page: number = 1,
     limit: number = 10,
@@ -150,6 +177,20 @@ export class CampaignsService {
    * ✅ FILTRA AUTOMÁTICAMENTE POR ORGANIZACIÓN
    */
   async findByUser(currentUser: User) {
+    if (this.cacheService) {
+      const cacheKey = currentUser.organizationId
+        ? `campaigns:byuser:${currentUser.organizationId}`
+        : `campaigns:byuser:all`;
+      return await this.cacheService.get(
+        cacheKey,
+        () => this.executeFindByUser(currentUser),
+        1800,
+      );
+    }
+    return await this.executeFindByUser(currentUser);
+  }
+
+  private async executeFindByUser(currentUser: User) {
     try {
       const query = this.campaignsRepository.createQueryBuilder('campaign');
 
@@ -181,6 +222,17 @@ export class CampaignsService {
    * ✅ VALIDA QUE LA CAMPAÑA PERTENEZCA A LA ORGANIZACIÓN DEL USUARIO
    */
   async findOneBasic(id: number, currentUser?: User) {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `campaigns:basic:${id}`,
+        () => this.executeFindOneBasic(id, currentUser),
+        1800,
+      );
+    }
+    return await this.executeFindOneBasic(id, currentUser);
+  }
+
+  private async executeFindOneBasic(id: number, currentUser?: User) {
     try {
       const query = this.campaignsRepository
         .createQueryBuilder('campaign')
@@ -225,9 +277,20 @@ export class CampaignsService {
    * ✅ VALIDA ACCESO POR ORGANIZACIÓN
    */
   async findOne(id: number, currentUser?: User) {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `campaigns:full:${id}`,
+        () => this.executeFindOne(id, currentUser),
+        1800,
+      );
+    }
+    return await this.executeFindOne(id, currentUser);
+  }
+
+  private async executeFindOne(id: number, currentUser?: User) {
     try {
       // Primero obtener la campaña básica con validación de organización
-      const campaign = await this.findOneBasic(id, currentUser);
+      const campaign = await this.executeFindOneBasic(id, currentUser);
 
       // Luego cargar candidatos y líderes por separado con try-catch
       try {
@@ -276,6 +339,20 @@ export class CampaignsService {
    * ✅ VALIDA QUE EL USUARIO TENGA ACCESO
    */
   async findByOrganization(organizationId: number, currentUser: User) {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `campaigns:org:${organizationId}`,
+        () => this.executeFindByOrganization(organizationId, currentUser),
+        1800,
+      );
+    }
+    return await this.executeFindByOrganization(organizationId, currentUser);
+  }
+
+  private async executeFindByOrganization(
+    organizationId: number,
+    currentUser: User,
+  ) {
     try {
       // ✅ VALIDACIÓN: Si el usuario es admin de organización,
       // solo puede ver sus propias campañas
@@ -341,6 +418,12 @@ export class CampaignsService {
         await this.assignUsersTooCampaign(id, userIds, currentUser);
       }
 
+      if (this.cacheService) {
+        await this.cacheService.invalidate(`campaigns:basic:${id}`);
+        await this.cacheService.invalidate(`campaigns:full:${id}`);
+        await this.cacheService.invalidateByPattern('campaigns:*');
+      }
+
       return await this.findOneBasic(id, currentUser);
     } catch (error) {
       if (
@@ -369,7 +452,15 @@ export class CampaignsService {
       // Eliminar asignaciones de usuarios antes de eliminar la campaña
       await this.campaignUserRepository.delete({ campaignId: id });
 
-      return await this.campaignsRepository.remove(campaign);
+      const result = await this.campaignsRepository.remove(campaign);
+
+      if (this.cacheService) {
+        await this.cacheService.invalidate(`campaigns:basic:${id}`);
+        await this.cacheService.invalidate(`campaigns:full:${id}`);
+        await this.cacheService.invalidateByPattern('campaigns:*');
+      }
+
+      return result;
     } catch (error) {
       if (
         error instanceof NotFoundException ||

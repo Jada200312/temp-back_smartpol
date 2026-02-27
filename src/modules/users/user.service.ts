@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -6,6 +6,7 @@ import { User } from '../../database/entities/user.entity';
 import { CampaignUser } from '../../database/entities/campaign-user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { CacheService } from '../../common/cache/cache.service';
 
 @Injectable()
 export class UserService {
@@ -14,14 +15,16 @@ export class UserService {
     private readonly userRepository: Repository<User>,
     @InjectRepository(CampaignUser)
     private readonly campaignUserRepository: Repository<CampaignUser>,
+    @Optional()
+    private readonly cacheService?: CacheService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const { campaignIds, organizationId, ...userData } = createUserDto;
-    
+
     // Hash la contraseña antes de guardar
     const hashedPassword = await bcrypt.hash(userData.password, 10);
-    
+
     const userCreateData: any = {
       ...userData,
       password: hashedPassword,
@@ -42,16 +45,44 @@ export class UserService {
       await this.assignUserToCampaigns(userIdToUse, campaignIds);
     }
 
+    // Invalidar cache después de crear
+    if (this.cacheService) {
+      await this.cacheService.invalidate('users:all');
+    }
+
     return (await this.findOne(userIdToUse))!;
   }
 
   async findAll(): Promise<User[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        'users:all',
+        () =>
+          this.userRepository.find({
+            relations: ['campaignUsers', 'campaignUsers.campaign'],
+          }),
+        1800, // 30 minutos
+      );
+    }
+
     return await this.userRepository.find({
       relations: ['campaignUsers', 'campaignUsers.campaign'],
     });
   }
 
   async findByRole(roleId: number): Promise<User[]> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `users:role:${roleId}`,
+        () =>
+          this.userRepository.find({
+            where: { roleId },
+            relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
+          }),
+        1800,
+      );
+    }
+
     return await this.userRepository.find({
       where: { roleId },
       relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
@@ -95,6 +126,18 @@ export class UserService {
   }
 
   async findOne(id: number): Promise<User | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `user:${id}`,
+        () =>
+          this.userRepository.findOne({
+            where: { id },
+            relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
+          }),
+        1800,
+      );
+    }
+
     return await this.userRepository.findOne({
       where: { id },
       relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
@@ -102,6 +145,18 @@ export class UserService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
+    if (this.cacheService) {
+      return await this.cacheService.get(
+        `user:email:${email}`,
+        () =>
+          this.userRepository.findOne({
+            where: { email },
+            relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
+          }),
+        300, // Menos tiempo para emails (pueden cambiar)
+      );
+    }
+
     return await this.userRepository.findOne({
       where: { email },
       relations: ['role', 'campaignUsers', 'campaignUsers.campaign'],
@@ -115,7 +170,7 @@ export class UserService {
     if (userData.password) {
       userData.password = await bcrypt.hash(userData.password, 10);
     }
-    
+
     await this.userRepository.update(id, userData);
 
     if (campaignIds && campaignIds.length > 0) {
@@ -123,15 +178,40 @@ export class UserService {
       await this.assignUserToCampaigns(id, campaignIds);
     }
 
+    // Invalidar cache
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`user:${id}`);
+      await this.cacheService.invalidate('users:all');
+      // Invalidar por roleId si existe
+      const user = await this.findOne(id);
+      if (user?.roleId) {
+        await this.cacheService.invalidate(`users:role:${user.roleId}`);
+      }
+    }
+
     return await this.findOne(id);
   }
 
   async updatePassword(id: number, hashedPassword: string): Promise<void> {
     await this.userRepository.update(id, { password: hashedPassword });
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`user:${id}`);
+      await this.cacheService.invalidate('users:all');
+    }
   }
 
   async remove(id: number): Promise<void> {
+    const user = await this.findOne(id);
     await this.userRepository.delete(id);
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`user:${id}`);
+      await this.cacheService.invalidate('users:all');
+      if (user?.roleId) {
+        await this.cacheService.invalidate(`users:role:${user.roleId}`);
+      }
+    }
   }
 
   async assignUserToCampaigns(userId: number, campaignIds: number[]) {
