@@ -518,8 +518,13 @@ export class VoterController {
   async update(
     @Param('id') id: string,
     @Body() updateVoterDto: UpdateVoterDto,
+    @CurrentUser() user: any,
   ): Promise<Voter | null> {
-    return await this.voterService.update(+id, updateVoterDto);
+    return await this.voterService.update(
+      +id,
+      updateVoterDto,
+      user?.organizationId,
+    );
   }
 
   @Delete(':id')
