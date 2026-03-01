@@ -2023,4 +2023,212 @@ export class VoterService {
       },
     };
   }
+
+  async searchVotersByNameOrIdentification(
+    search: string,
+    paginationQueryDto: PaginationQueryDto,
+    user?: any,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    const { page = 1, limit = 20 } = paginationQueryDto;
+    const skip = (page - 1) * limit;
+    const searchTerm = `%${search.toLowerCase()}%`;
+
+    // Si es digitador o admin de campaña, filtrar por organización
+    if (
+      user &&
+      (user.roleId === 2 || user.roleId === 5) &&
+      user.organizationId
+    ) {
+      // Contar total de resultados
+      const countQuery = `
+        SELECT COUNT(DISTINCT v.id) as count
+        FROM voters v
+        LEFT JOIN candidate_voter cv ON v.id = cv.voter_id
+        LEFT JOIN candidates c ON cv.candidate_id = c.id
+        LEFT JOIN campaigns cam ON c."campaignId" = cam.id
+        LEFT JOIN leaders l ON cv.leader_id = l.id
+        LEFT JOIN campaigns cam2 ON l."campaignId" = cam2.id
+        LEFT JOIN users u ON v."createdByUserId" = u.id
+        WHERE (
+          LOWER(v."firstName") LIKE $1
+          OR LOWER(v."lastName") LIKE $1
+          OR LOWER(v.identification) LIKE $1
+        )
+        AND (
+          cam."organizationId" = $2
+          OR cam2."organizationId" = $2
+          OR u."organizationId" = $2
+        )
+      `;
+
+      const totalResult = await this.voterRepository.query(countQuery, [
+        searchTerm,
+        user.organizationId,
+      ]);
+      const total = parseInt(totalResult[0]?.count || '0');
+
+      if (total === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Obtener voters paginados
+      const dataQuery = `
+        SELECT DISTINCT v.*
+        FROM voters v
+        LEFT JOIN candidate_voter cv ON v.id = cv.voter_id
+        LEFT JOIN candidates c ON cv.candidate_id = c.id
+        LEFT JOIN campaigns cam ON c."campaignId" = cam.id
+        LEFT JOIN leaders l ON cv.leader_id = l.id
+        LEFT JOIN campaigns cam2 ON l."campaignId" = cam2.id
+        LEFT JOIN users u ON v."createdByUserId" = u.id
+        WHERE (
+          LOWER(v."firstName") LIKE $1
+          OR LOWER(v."lastName") LIKE $1
+          OR LOWER(v.identification) LIKE $1
+        )
+        AND (
+          cam."organizationId" = $2
+          OR cam2."organizationId" = $2
+          OR u."organizationId" = $2
+        )
+        ORDER BY v."firstName" ASC
+        LIMIT $3 OFFSET $4
+      `;
+
+      const voters = await this.voterRepository.query(dataQuery, [
+        searchTerm,
+        user.organizationId,
+        limit,
+        skip,
+      ]);
+
+      // Enriquecer con relaciones
+      const voterIds = voters.map((v) => v.id);
+      if (voterIds.length === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+          hasNextPage: page < Math.ceil(total / limit),
+          hasPreviousPage: page > 1,
+        };
+      }
+
+      // Cargar relaciones
+      const enrichedVoters = await this.voterRepository.find({
+        where: { id: In(voterIds) },
+        relations: ['department', 'municipality', 'votingBooth'],
+      });
+
+      // Cargar assignments
+      const candidateVoters = await this.candidateVoterRepository.find({
+        where: { voterId: In(voterIds) },
+        relations: ['candidate', 'leader'],
+      });
+
+      const candidateMap = new Map();
+      const leaderMap = new Map();
+
+      candidateVoters.forEach((cv) => {
+        if (!candidateMap.has(cv.voterId)) {
+          candidateMap.set(cv.voterId, []);
+        }
+        if (cv.candidate) {
+          candidateMap.get(cv.voterId).push(cv.candidate);
+        }
+
+        if (!leaderMap.has(cv.voterId)) {
+          leaderMap.set(cv.voterId, []);
+        }
+        if (cv.leader) {
+          leaderMap.get(cv.voterId).push(cv.leader);
+        }
+      });
+
+      enrichedVoters.forEach((voter) => {
+        voter.candidates = candidateMap.get(voter.id) || [];
+        voter.leaders = leaderMap.get(voter.id) || [];
+      });
+
+      // Reordenar para que coincida con el orden de la query
+      const orderedVoters = voterIds
+        .map((id) => enrichedVoters.find((v) => v.id === id))
+        .filter((v) => v !== undefined);
+
+      return {
+        data: orderedVoters,
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+      };
+    }
+
+    // Para usuarios sin filtro organizacional
+    const [voters, total] = await this.voterRepository
+      .createQueryBuilder('voter')
+      .where(
+        'LOWER(voter.firstName) LIKE LOWER(:search) OR LOWER(voter.lastName) LIKE LOWER(:search) OR LOWER(voter.identification) LIKE LOWER(:search)',
+        { search: searchTerm },
+      )
+      .skip(skip)
+      .take(limit)
+      .orderBy('voter.firstName', 'ASC')
+      .getManyAndCount();
+
+    // Cargar assignments
+    const voterIds = voters.map((v) => v.id);
+    if (voterIds.length > 0) {
+      const candidateVoters = await this.candidateVoterRepository.find({
+        where: { voterId: In(voterIds) },
+        relations: ['candidate', 'leader'],
+      });
+
+      const candidateMap = new Map();
+      const leaderMap = new Map();
+
+      candidateVoters.forEach((cv) => {
+        if (!candidateMap.has(cv.voterId)) {
+          candidateMap.set(cv.voterId, []);
+        }
+        if (cv.candidate) {
+          candidateMap.get(cv.voterId).push(cv.candidate);
+        }
+
+        if (!leaderMap.has(cv.voterId)) {
+          leaderMap.set(cv.voterId, []);
+        }
+        if (cv.leader) {
+          leaderMap.get(cv.voterId).push(cv.leader);
+        }
+      });
+
+      voters.forEach((voter) => {
+        voter.candidates = candidateMap.get(voter.id) || [];
+        voter.leaders = leaderMap.get(voter.id) || [];
+      });
+    }
+
+    return {
+      data: voters,
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit),
+      hasNextPage: page < Math.ceil(total / limit),
+      hasPreviousPage: page > 1,
+    };
+  }
 }

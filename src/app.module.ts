@@ -54,6 +54,7 @@ import {
       username: process.env.DB_USERNAME || 'temp-smartpol_user',
       password: process.env.DB_PASSWORD || 'temp-smartpol_password',
       database: process.env.DB_DATABASE || 'temp-smartpol_db',
+      ssl: false,
       entities: [
         User,
         Role,
@@ -79,11 +80,11 @@ import {
         process.env.DB_LOGGING === 'true' ? ['query', 'error'] : ['error'],
       // Connection pool configuration for production
       extra: {
-        max: parseInt(process.env.DB_POOL_SIZE || '20', 10),
-        min: parseInt(process.env.DB_POOL_MIN || '5', 10),
+        max: parseInt(process.env.DB_POOL_SIZE || '10', 10),
+        min: parseInt(process.env.DB_POOL_MIN || '1', 10),
         idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
         connectionTimeoutMillis: parseInt(
-          process.env.DB_CONNECTION_TIMEOUT || '5000',
+          process.env.DB_CONNECTION_TIMEOUT || '15000',
           10,
         ),
         statement_timeout: parseInt(

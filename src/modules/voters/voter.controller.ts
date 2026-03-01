@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,6 +30,7 @@ import {
   PaginationQueryDto,
   PaginatedResponseDto,
 } from './dto/pagination-query.dto';
+import { SearchVotersDto } from './dto/search-voters.dto';
 import { Voter } from '../../database/entities/voter.entity';
 import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
 import { RegisterVoteDto } from './dto/register-vote.dto';
@@ -182,6 +184,49 @@ export class VoterController {
       roleId ? parseInt(roleId) : undefined,
       candidateId ? parseInt(candidateId) : undefined,
       leaderId ? parseInt(leaderId) : undefined,
+      user,
+    );
+  }
+
+  @Get('search/by-name-or-identification')
+  @Permission('voters:read')
+  @ApiOperation({
+    summary: 'Search voters by name or identification with pagination',
+    description:
+      'Search for voters by first name, last name, or identification number. Returns paginated results with assigned candidates and leaders.',
+  })
+  @ApiQuery({
+    name: 'q',
+    type: String,
+    required: true,
+    description: 'Search query (firstName, lastName, or identification)',
+    example: 'Juan',
+  })
+  @ApiQuery({
+    name: 'page',
+    type: Number,
+    required: false,
+    example: 1,
+    description: 'Page number (starting from 1)',
+  })
+  @ApiQuery({
+    name: 'limit',
+    type: Number,
+    required: false,
+    example: 20,
+    description: 'Number of items per page (max 100)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results retrieved successfully',
+  })
+  async searchByNameOrIdentification(
+    @Query() searchDto: SearchVotersDto,
+    @CurrentUser() user: any,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    return await this.voterService.searchVotersByNameOrIdentification(
+      searchDto.q,
+      searchDto,
       user,
     );
   }
