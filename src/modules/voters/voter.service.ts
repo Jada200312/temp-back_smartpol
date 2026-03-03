@@ -5,7 +5,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository, In, ILike } from 'typeorm';
 import { Voter } from '../../database/entities/voter.entity';
 import { Candidate } from '../../database/entities/candidate.entity';
 import { Leader } from '../../database/entities/leader.entity';
@@ -14,6 +14,7 @@ import { Department } from '../../database/entities/department.entity';
 import { Municipality } from '../../database/entities/municipality.entity';
 import { VotingBooth } from '../../database/entities/voting-booth.entity';
 import { VotersHistory } from '../../database/entities/voters-history.entity';
+import { Divipol } from '../../database/entities/divipol.entity';
 import { CreateVoterDto } from './dto/create-voter.dto';
 import { UpdateVoterDto } from './dto/update-voter.dto';
 import { AssignCandidateDto } from './dto/assign-candidate.dto';
@@ -44,6 +45,8 @@ export class VoterService {
     private readonly votingBoothRepository: Repository<VotingBooth>,
     @InjectRepository(VotersHistory)
     private readonly votersHistoryRepository: Repository<VotersHistory>,
+    @InjectRepository(Divipol)
+    private readonly divipolRepository: Repository<Divipol>,
     @Optional()
     private readonly cacheService?: CacheService,
   ) {}
@@ -2024,6 +2027,112 @@ export class VoterService {
     };
   }
 
+  async searchVotersByTrackingFilter(
+    status: 'expected' | 'registered' | 'pending',
+    identification: string,
+    paginationQueryDto: any,
+    user: any,
+  ): Promise<any> {
+    const page = paginationQueryDto.page || 1;
+    const limit = paginationQueryDto.limit || 20;
+    const skip = (page - 1) * limit;
+    const searchTerm = `%${identification.toLowerCase()}%`;
+
+    // If user has organizationId, filter voters by organization
+    if (user?.organizationId) {
+      // Get campaigns for this organization
+      const campaigns = await this.voterRepository.query(
+        'SELECT id FROM campaigns WHERE "organizationId" = $1',
+        [user.organizationId],
+      );
+      const campaignIds = campaigns.map((c) => c.id);
+
+      if (campaignIds.length === 0) {
+        return {
+          data: [],
+          pagination: {
+            total: 0,
+            page,
+            limit,
+            pages: 0,
+          },
+        };
+      }
+
+      // Build WHERE clause based on status
+      let statusWhere = '';
+      if (status === 'registered') {
+        statusWhere = 'AND v."hasvoted" = true';
+      } else if (status === 'pending') {
+        statusWhere = 'AND v."hasvoted" = false';
+      }
+      // For 'expected', no additional WHERE clause needed (all voters)
+
+      // Get voters by tracking filter and identification with pagination
+      const [voters, total] = await Promise.all([
+        this.voterRepository.query(
+          `SELECT DISTINCT v.* FROM voters v
+           INNER JOIN candidate_voter cv ON v.id = cv."voter_id"
+           INNER JOIN candidates c ON cv."candidate_id" = c.id
+           WHERE c."campaignId" IN (${campaignIds.join(',')}) 
+           AND LOWER(v."identification") LIKE $1
+           ${statusWhere}
+           ORDER BY v."identification" ASC
+           LIMIT $2 OFFSET $3`,
+          [searchTerm, limit, skip],
+        ),
+        this.voterRepository.query(
+          `SELECT COUNT(DISTINCT v.id) as count FROM voters v
+           INNER JOIN candidate_voter cv ON v.id = cv."voter_id"
+           INNER JOIN candidates c ON cv."candidate_id" = c.id
+           WHERE c."campaignId" IN (${campaignIds.join(',')}) 
+           AND LOWER(v."identification") LIKE $1
+           ${statusWhere}`,
+          [searchTerm],
+        ),
+      ]);
+
+      return {
+        data: voters,
+        pagination: {
+          total: parseInt(total[0]?.count || 0, 10),
+          page,
+          limit,
+          pages: Math.ceil(parseInt(total[0]?.count || 0, 10) / limit),
+        },
+      };
+    }
+
+    // If no organizationId, search across all voters
+    let where: any = {
+      identification: ILike(`%${identification}%`),
+    };
+
+    if (status === 'registered') {
+      where.hasVoted = true;
+    } else if (status === 'pending') {
+      where.hasVoted = false;
+    }
+    // For 'expected', no additional WHERE clause needed
+
+    const [voters, total] = await this.voterRepository.findAndCount({
+      where,
+      skip,
+      take: limit,
+      order: { identification: 'ASC' },
+    });
+
+    return {
+      data: voters,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   async searchVotersByNameOrIdentification(
     search: string,
     paginationQueryDto: PaginationQueryDto,
@@ -2230,5 +2339,175 @@ export class VoterService {
       hasNextPage: page < Math.ceil(total / limit),
       hasPreviousPage: page > 1,
     };
+  }
+
+  async getAnalysisReport(filters: any, user?: any): Promise<any[]> {
+    // Obtener IDs de votantes únicos basados en organización
+    let voterIdQuery = this.candidateVoterRepository
+      .createQueryBuilder('cv')
+      .select('DISTINCT voter.id', 'voterId')
+      .leftJoin('cv.voter', 'voter')
+      .leftJoin('cv.candidate', 'candidate')
+      .leftJoin('candidate.campaign', 'campaign');
+
+    // Filtro por organización
+    if (user && user.organizationId) {
+      voterIdQuery = voterIdQuery.andWhere(
+        'campaign.organizationId = :organizationId',
+        {
+          organizationId: user.organizationId,
+        },
+      );
+    }
+
+    const voterIds = await voterIdQuery.getRawMany();
+    const voterIdList = voterIds.map((v) => v.voterId);
+
+    // Si no hay votantes, retornar array vacío
+    if (voterIdList.length === 0) {
+      return [];
+    }
+
+    // Obtener datos de divipol para mapeo
+    const divipolData = await this.divipolRepository.find();
+    const divipolMap = {};
+    divipolData.forEach((divipol) => {
+      const key = `${divipol.puesto}_${divipol.mesa}`;
+      divipolMap[key] = divipol.total_por_mesa;
+    });
+
+    // Construir query para obtener votantes con filtros de ubicación
+    let query = this.voterRepository
+      .createQueryBuilder('voter')
+      .leftJoinAndSelect('voter.department', 'department')
+      .leftJoinAndSelect('voter.municipality', 'municipality')
+      .leftJoinAndSelect('voter.votingBooth', 'votingBooth')
+      .whereInIds(voterIdList);
+
+    // Filtros por ubicación
+    if (filters.departmentId) {
+      query = query.andWhere('voter.departmentId = :departmentId', {
+        departmentId: parseInt(filters.departmentId, 10),
+      });
+    }
+
+    if (filters.municipalityId) {
+      query = query.andWhere('voter.municipalityId = :municipalityId', {
+        municipalityId: parseInt(filters.municipalityId, 10),
+      });
+    }
+
+    if (filters.votingBoothId) {
+      query = query.andWhere('voter.votingBoothId = :votingBoothId', {
+        votingBoothId: parseInt(filters.votingBoothId, 10),
+      });
+    }
+
+    if (filters.votingTableId) {
+      query = query.andWhere('voter.votingTableId = :votingTableId', {
+        votingTableId: filters.votingTableId,
+      });
+    }
+
+    const voters = await query.getMany();
+
+    // Agrupar primero por puesto de votación, luego por mesa
+    const groupedByBooth: { [key: string]: any } = {};
+
+    voters.forEach((voter) => {
+      const boothKey = `${voter.votingBooth?.id || 'N/A'}`;
+      const mesa = voter.votingTableId || 'N/A';
+
+      if (!groupedByBooth[boothKey]) {
+        groupedByBooth[boothKey] = {
+          departamento: voter.department?.name || 'N/A',
+          municipio: voter.municipality?.name || 'N/A',
+          puestoVotacion: voter.votingBooth?.name || 'N/A',
+          totalPuesto: voter.votingBooth?.mesas || 0,
+          mesas: {},
+        };
+      }
+
+      if (!groupedByBooth[boothKey].mesas[mesa]) {
+        groupedByBooth[boothKey].mesas[mesa] = [];
+      }
+
+      groupedByBooth[boothKey].mesas[mesa].push(voter);
+    });
+
+    // Convertir estructura a array con mesas procesadas
+    const result = Object.entries(groupedByBooth).map(
+      ([boothKey, booth]: any) => {
+        const mesasArray = Object.entries(booth.mesas).map(
+          ([mesa, votersInMesa]: any) => {
+            const totalRegistrado = votersInMesa.length;
+            const totalVotado = votersInMesa.filter((v) => v.hasVoted).length;
+
+            // Extraer el número de la mesa (ej: "Mesa 1" -> 1)
+            const mesaNumber = parseInt(mesa.replace(/\D/g, '')) || mesa;
+
+            // Obtener el totalDivipol mapeando puesto y mesa
+            const divipolKey = `${boothKey}_${mesaNumber}`;
+            const totalDivipol = divipolMap[divipolKey] || 0;
+
+            // Calcular porcentajes vs DIVIPOLE
+            const porcentajeRegistradoVsDivipol =
+              totalDivipol > 0
+                ? ((totalRegistrado / totalDivipol) * 100).toFixed(2)
+                : '0.00';
+            const porcentajeVotadoVsDivipol =
+              totalDivipol > 0
+                ? ((totalVotado / totalDivipol) * 100).toFixed(2)
+                : '0.00';
+
+            return {
+              mesa,
+              totalRegistrado,
+              totalVotado,
+              totalDivipol,
+              porcentajeRegistradoVsDivipol,
+              porcentajeVotadoVsDivipol,
+            };
+          },
+        );
+
+        // Calcular totalPuesto como suma de todos los totalRegistrado
+        const totalPuesto = mesasArray.reduce(
+          (sum, mesa) => sum + mesa.totalRegistrado,
+          0,
+        );
+
+        return {
+          departamento: booth.departamento,
+          municipio: booth.municipio,
+          puestoVotacion: booth.puestoVotacion,
+          totalPuesto,
+          mesas: mesasArray,
+        };
+      },
+    );
+
+    // Ordenar por departamento, municipio, puesto
+    result.sort((a, b) => {
+      if (a.departamento !== b.departamento) {
+        return a.departamento.localeCompare(b.departamento);
+      }
+      if (a.municipio !== b.municipio) {
+        return a.municipio.localeCompare(b.municipio);
+      }
+      return a.puestoVotacion.localeCompare(b.puestoVotacion);
+    });
+
+    // Ordenar mesas dentro de cada puesto
+    result.forEach((booth) => {
+      booth.mesas.sort((a, b) => {
+        // Extraer el número de la mesa (ej: "Mesa 1" -> 1)
+        const numA = parseInt(a.mesa.replace(/\D/g, '')) || 0;
+        const numB = parseInt(b.mesa.replace(/\D/g, '')) || 0;
+        return numA - numB;
+      });
+    });
+
+    return result;
   }
 }

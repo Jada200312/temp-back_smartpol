@@ -17,3 +17,4 @@ export { Organization } from './organizations.entity';
 export { Campaign } from './campaigns.entity';
 export { CampaignUser } from './campaign-user.entity';
 export { VotersHistory } from './voters-history.entity';
+export { Divipol } from './divipol.entity';

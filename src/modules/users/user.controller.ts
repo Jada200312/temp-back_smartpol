@@ -24,6 +24,7 @@ import { UserService } from './user.service';
 import { Permission } from '../../permissions/permission.decorator';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { User } from '../../database/entities/user.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -153,6 +154,70 @@ export class UserController {
     }
     // Si no hay roleId pero hay paginación, devolveremos los datos con la estructura de paginación
     return await this.userService.findAll();
+  }
+
+  @Post('change-password')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Change own password',
+    description:
+      'Change the authenticated user password. Only admins (Superadmin or Campaign Admin) can use this endpoint.',
+  })
+  @ApiBody({
+    type: ChangePasswordDto,
+    description: 'New password',
+    examples: {
+      example1: {
+        value: {
+          newPassword: 'mynewpassword123',
+        },
+        description: 'Example of changing password',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+    schema: {
+      example: {
+        id: 1,
+        email: 'user@example.com',
+        createdAt: '2024-01-27T10:30:00Z',
+        updatedAt: '2024-01-27T10:30:01Z',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - User not authenticated',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - Only admins can change their own password',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'User not found',
+  })
+  async changeOwnPassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Request() req: any,
+  ): Promise<User | null> {
+    const userId = req.user?.id;
+    const userRole = req.user?.roleId;
+
+    // Only allow Superadmin (roleId=1) and Campaign Admin (roleId=2) to change their password
+    if (userRole !== 1 && userRole !== 2) {
+      throw new ForbiddenException(
+        'Solo administradores pueden cambiar su contraseña. El admin de campaña debe cambiar tu contraseña.',
+      );
+    }
+
+    return await this.userService.changeOwnPassword(
+      userId,
+      changePasswordDto.newPassword,
+    );
   }
 
   @Get(':id')
