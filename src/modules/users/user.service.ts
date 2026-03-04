@@ -1,4 +1,4 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Optional, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -199,6 +199,32 @@ export class UserService {
       await this.cacheService.invalidate(`user:${id}`);
       await this.cacheService.invalidate('users:all');
     }
+  }
+
+  async changeOwnPassword(
+    userId: number,
+    newPassword: string,
+  ): Promise<User | null> {
+    const user = await this.findOne(userId);
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await this.userRepository.update(userId, { password: hashedPassword });
+
+    if (this.cacheService) {
+      await this.cacheService.invalidate(`user:${userId}`);
+      await this.cacheService.invalidate('users:all');
+      if (user.roleId) {
+        await this.cacheService.invalidate(`users:role:${user.roleId}`);
+      }
+    }
+
+    return await this.findOne(userId);
   }
 
   async remove(id: number): Promise<void> {

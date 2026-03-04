@@ -31,6 +31,8 @@ import {
   PaginatedResponseDto,
 } from './dto/pagination-query.dto';
 import { SearchVotersDto } from './dto/search-voters.dto';
+import { SearchTrackingFilterDto } from './dto/search-tracking-filter.dto';
+import { AnalysisReportFilterDto } from './dto/analysis-report.dto';
 import { Voter } from '../../database/entities/voter.entity';
 import { CandidateVoter } from '../../database/entities/candidate-voter.entity';
 import { RegisterVoteDto } from './dto/register-vote.dto';
@@ -512,6 +514,29 @@ export class VoterController {
     );
   }
 
+  @Get('list/search-by-tracking-filter')
+  @Permission('voters:read')
+  @ApiOperation({
+    summary: 'Search voters by identification within a tracking filter',
+    description:
+      'Search for voters by identification (cédula) within a specific tracking filter (expected, registered, or pending)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Search results retrieved successfully',
+  })
+  async searchVotersByTrackingFilter(
+    @Query() searchTrackingFilterDto: SearchTrackingFilterDto,
+    @CurrentUser() user: any,
+  ): Promise<PaginatedResponseDto<Voter>> {
+    return await this.voterService.searchVotersByTrackingFilter(
+      searchTrackingFilterDto.status,
+      searchTrackingFilterDto.identification,
+      searchTrackingFilterDto,
+      user,
+    );
+  }
+
   @Get(':id')
   @Permission('voters:read')
   @ApiParam({
@@ -890,6 +915,61 @@ export class VoterController {
     @CurrentUser() user?: any,
   ): Promise<any> {
     return await this.voterService.getVoterReport(filters, user);
+  }
+
+  @Get('report/analysis')
+  @Permission('reports:read')
+  @ApiOperation({
+    summary: 'Get analysis report grouped by voting table',
+    description:
+      'Get voting analysis data grouped by mesa (voting table) with metrics like total registered and total voted voters.',
+  })
+  @ApiQuery({
+    name: 'departmentId',
+    type: 'number',
+    required: false,
+    description: 'Filter by department ID',
+  })
+  @ApiQuery({
+    name: 'municipalityId',
+    type: 'number',
+    required: false,
+    description: 'Filter by municipality ID',
+  })
+  @ApiQuery({
+    name: 'votingBoothId',
+    type: 'number',
+    required: false,
+    description: 'Filter by voting booth ID',
+  })
+  @ApiQuery({
+    name: 'votingTableId',
+    type: 'number',
+    required: false,
+    description: 'Filter by voting table ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Analysis report retrieved successfully',
+    schema: {
+      example: [
+        {
+          departamento: 'SUCRE',
+          municipio: 'OVEJAS',
+          puestoVotacion: 'CABECERA MUNICIPAL',
+          totalPuesto: 340,
+          mesa: '1',
+          totalRegistrado: 20,
+          totalVotado: 18,
+        },
+      ],
+    },
+  })
+  async getAnalysisReport(
+    @Query() filters: AnalysisReportFilterDto,
+    @CurrentUser() user?: any,
+  ): Promise<any[]> {
+    return await this.voterService.getAnalysisReport(filters, user);
   }
 
   @Post('register-vote')

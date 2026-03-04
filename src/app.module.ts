@@ -38,6 +38,7 @@ import {
   Campaign,
   CampaignUser,
   VotersHistory,
+  Divipol,
 } from './database/entities';
 
 @Module({
@@ -74,6 +75,7 @@ import {
         Campaign,
         CampaignUser,
         VotersHistory,
+        Divipol,
       ],
       synchronize: false,
       logging:
@@ -112,6 +114,7 @@ import {
       Campaign,
       CampaignUser,
       VotersHistory,
+      Divipol,
     ]),
     AuthModule,
     CorporationModule,
