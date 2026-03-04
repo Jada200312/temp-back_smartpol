@@ -2285,6 +2285,310 @@ export class VoterService {
       };
     }
 
+    // Si es candidato (roleId=3), filtrar solo sus votantes
+    if (user && user.roleId === 3) {
+      // Obtener candidateId del usuario
+      const candidate = await this.candidateRepository.findOne({
+        where: { userId: user.id },
+      });
+
+      if (!candidate) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Obtener voters de este candidato
+      const candidateVoters = await this.candidateVoterRepository.find({
+        where: { candidateId: candidate.id },
+        select: ['voterId'],
+      });
+      const voterIds = candidateVoters.map((cv) => cv.voterId);
+
+      if (voterIds.length === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Contar total de resultados
+      const countQuery = `
+        SELECT COUNT(DISTINCT v.id) as count
+        FROM voters v
+        WHERE (
+          LOWER(v."firstName") LIKE $1
+          OR LOWER(v."lastName") LIKE $1
+          OR LOWER(v.identification) LIKE $1
+        )
+        AND v.id = ANY($2::integer[])
+      `;
+
+      const totalResult = await this.voterRepository.query(countQuery, [
+        searchTerm,
+        voterIds,
+      ]);
+      const total = parseInt(totalResult[0]?.count || '0');
+
+      if (total === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Obtener voters paginados
+      const dataQuery = `
+        SELECT DISTINCT v.*
+        FROM voters v
+        WHERE (
+          LOWER(v."firstName") LIKE $1
+          OR LOWER(v."lastName") LIKE $1
+          OR LOWER(v.identification) LIKE $1
+        )
+        AND v.id = ANY($2::integer[])
+        ORDER BY v."firstName" ASC
+        LIMIT $3 OFFSET $4
+      `;
+
+      const voters = await this.voterRepository.query(dataQuery, [
+        searchTerm,
+        voterIds,
+        limit,
+        skip,
+      ]);
+
+      // Enriquecer con relaciones
+      const voterIdsFiltered = voters.map((v) => v.id);
+      if (voterIdsFiltered.length === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+          hasNextPage: page < Math.ceil(total / limit),
+          hasPreviousPage: page > 1,
+        };
+      }
+
+      const enrichedVoters = await this.voterRepository.find({
+        where: { id: In(voterIdsFiltered) },
+        relations: ['department', 'municipality', 'votingBooth'],
+      });
+
+      const candidateVotersEnriched = await this.candidateVoterRepository.find({
+        where: { voterId: In(voterIdsFiltered) },
+        relations: ['candidate', 'leader'],
+      });
+
+      const candidateMap = new Map();
+      const leaderMap = new Map();
+
+      candidateVotersEnriched.forEach((cv) => {
+        if (!candidateMap.has(cv.voterId)) {
+          candidateMap.set(cv.voterId, []);
+        }
+        if (cv.candidate) {
+          candidateMap.get(cv.voterId).push(cv.candidate);
+        }
+
+        if (!leaderMap.has(cv.voterId)) {
+          leaderMap.set(cv.voterId, []);
+        }
+        if (cv.leader) {
+          leaderMap.get(cv.voterId).push(cv.leader);
+        }
+      });
+
+      enrichedVoters.forEach((voter) => {
+        voter.candidates = candidateMap.get(voter.id) || [];
+        voter.leaders = leaderMap.get(voter.id) || [];
+      });
+
+      const orderedVoters = voterIdsFiltered
+        .map((id) => enrichedVoters.find((v) => v.id === id))
+        .filter((v) => v !== undefined);
+
+      return {
+        data: orderedVoters,
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+      };
+    }
+
+    // Si es líder (roleId=4), filtrar solo sus votantes
+    if (user && user.roleId === 4) {
+      // Obtener leaderId del usuario
+      const leader = await this.leaderRepository.findOne({
+        where: { userId: user.id },
+      });
+
+      if (!leader) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Obtener voters de este líder
+      const leaderVoters = await this.candidateVoterRepository.find({
+        where: { leaderId: leader.id },
+        select: ['voterId'],
+      });
+      const voterIds = leaderVoters.map((lv) => lv.voterId);
+
+      if (voterIds.length === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Contar total de resultados
+      const countQuery = `
+        SELECT COUNT(DISTINCT v.id) as count
+        FROM voters v
+        WHERE (
+          LOWER(v."firstName") LIKE $1
+          OR LOWER(v."lastName") LIKE $1
+          OR LOWER(v.identification) LIKE $1
+        )
+        AND v.id = ANY($2::integer[])
+      `;
+
+      const totalResult = await this.voterRepository.query(countQuery, [
+        searchTerm,
+        voterIds,
+      ]);
+      const total = parseInt(totalResult[0]?.count || '0');
+
+      if (total === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+          hasNextPage: false,
+          hasPreviousPage: false,
+        };
+      }
+
+      // Obtener voters paginados
+      const dataQuery = `
+        SELECT DISTINCT v.*
+        FROM voters v
+        WHERE (
+          LOWER(v."firstName") LIKE $1
+          OR LOWER(v."lastName") LIKE $1
+          OR LOWER(v.identification) LIKE $1
+        )
+        AND v.id = ANY($2::integer[])
+        ORDER BY v."firstName" ASC
+        LIMIT $3 OFFSET $4
+      `;
+
+      const voters = await this.voterRepository.query(dataQuery, [
+        searchTerm,
+        voterIds,
+        limit,
+        skip,
+      ]);
+
+      // Enriquecer con relaciones
+      const voterIdsFiltered = voters.map((v) => v.id);
+      if (voterIdsFiltered.length === 0) {
+        return {
+          data: [],
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+          hasNextPage: page < Math.ceil(total / limit),
+          hasPreviousPage: page > 1,
+        };
+      }
+
+      const enrichedVoters = await this.voterRepository.find({
+        where: { id: In(voterIdsFiltered) },
+        relations: ['department', 'municipality', 'votingBooth'],
+      });
+
+      const leaderVotersEnriched = await this.candidateVoterRepository.find({
+        where: { voterId: In(voterIdsFiltered) },
+        relations: ['candidate', 'leader'],
+      });
+
+      const candidateMap = new Map();
+      const leaderMap = new Map();
+
+      leaderVotersEnriched.forEach((lv) => {
+        if (!candidateMap.has(lv.voterId)) {
+          candidateMap.set(lv.voterId, []);
+        }
+        if (lv.candidate) {
+          candidateMap.get(lv.voterId).push(lv.candidate);
+        }
+
+        if (!leaderMap.has(lv.voterId)) {
+          leaderMap.set(lv.voterId, []);
+        }
+        if (lv.leader) {
+          leaderMap.get(lv.voterId).push(lv.leader);
+        }
+      });
+
+      enrichedVoters.forEach((voter) => {
+        voter.candidates = candidateMap.get(voter.id) || [];
+        voter.leaders = leaderMap.get(voter.id) || [];
+      });
+
+      const orderedVoters = voterIdsFiltered
+        .map((id) => enrichedVoters.find((v) => v.id === id))
+        .filter((v) => v !== undefined);
+
+      return {
+        data: orderedVoters,
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+        hasNextPage: page < Math.ceil(total / limit),
+        hasPreviousPage: page > 1,
+      };
+    }
+
     // Para usuarios sin filtro organizacional
     const [voters, total] = await this.voterRepository
       .createQueryBuilder('voter')
